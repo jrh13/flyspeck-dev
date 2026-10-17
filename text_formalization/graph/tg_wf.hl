@@ -9,6 +9,8 @@
 
 flyspeck_needs "graph/tg_check.hl";;
 
+prioritize_num();;
+
 module Tg_wf = struct
 
 open Tg_list;;

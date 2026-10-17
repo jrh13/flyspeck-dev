@@ -12,6 +12,8 @@
 
 needs "Library/iter.ml";;
 
+prioritize_num();;
+
 module Tg_list = struct
 
 (* ------------------------------------------------------------------------- *)

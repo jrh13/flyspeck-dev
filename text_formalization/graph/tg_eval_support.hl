@@ -12,6 +12,8 @@
 
 flyspeck_needs "graph/tg_check.hl";;
 
+prioritize_num();;
+
 module Tg_eval_support = struct
 
 open Tg_list;;
@@ -25,7 +27,7 @@ needs "Formal_ineqs/arith_options.hl";;
 Arith_options.base := 200;;
 Arith_options.cached := false;;
 needs "Formal_ineqs/arith/arith_nat.hl";;
-needs "eval_support.hl";;
+needs "graph/eval/eval_support.hl";;
 
 let f_SUC =
   let op = Misc_vars.suc_op_num in

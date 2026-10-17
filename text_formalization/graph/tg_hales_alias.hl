@@ -8,6 +8,9 @@
 (* Flyspeck a verbatim replica (graph_native/hales_defs.hl) binds the names. *)
 (* ========================================================================= *)
 
+prioritize_num();;
+
+
 module Tg_hales_alias = struct
 
 let h_cat = Seq.cat;;

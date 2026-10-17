@@ -20,6 +20,8 @@ flyspeck_needs "graph/tg_archive.hl";;
 flyspeck_needs "graph/tg_eval_db.hl";;
 flyspeck_needs "graph/tg_xdriver_lemmas.hl";;
 
+prioritize_num();;
+
 module Tg_driver = struct
 
 open Tg_list;;

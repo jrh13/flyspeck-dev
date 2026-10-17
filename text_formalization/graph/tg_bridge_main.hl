@@ -10,6 +10,8 @@ flyspeck_needs "graph/tg_main.hl";;
 flyspeck_needs "graph/tg_bridge_tame.hl";;
 flyspeck_needs "graph/tg_archive_bridge.hl";;
 
+prioritize_num();;
+
 module Tg_bridge_main = struct
 
 open Tg_list;;

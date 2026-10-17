@@ -7,6 +7,8 @@
 flyspeck_needs "graph/tg_exec.hl";;
 flyspeck_needs "graph/tg_xcheck.hl";;
 
+prioritize_num();;
+
 module Tg_xstats = struct
 
 open Tg_list;;

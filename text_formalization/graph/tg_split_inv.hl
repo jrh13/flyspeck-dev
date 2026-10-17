@@ -23,6 +23,8 @@ flyspeck_needs "graph/tg_mono.hl";;
 flyspeck_needs "graph/tg_lbthm.hl";;
 flyspeck_needs "graph/tg_wf_inv.hl";;
 
+prioritize_num();;
+
 module Tg_split_inv = struct
 
 open Tg_list;;

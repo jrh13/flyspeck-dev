@@ -12,6 +12,8 @@ flyspeck_needs "graph/tg_isothm.hl";;
 flyspeck_needs "graph/tg_enum_props.hl";;
 flyspeck_needs "graph/tg_enum_fast.hl";;
 
+prioritize_num();;
+
 module Tg_enum_fast2 = struct
 
 open Tg_list;;

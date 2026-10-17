@@ -16,6 +16,8 @@ flyspeck_needs "graph/tg_wf_inv.hl";;
 flyspeck_needs "graph/tg_isothm.hl";;
 flyspeck_needs "graph/tg_archive.hl";;
 
+prioritize_num();;
+
 module Tg_enum_props = struct
 
 open Tg_list;;

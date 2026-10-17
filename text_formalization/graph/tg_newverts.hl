@@ -12,6 +12,8 @@
 flyspeck_needs "graph/tg_mono.hl";;
 flyspeck_needs "graph/tg_lbthm.hl";;
 
+prioritize_num();;
+
 module Tg_newverts = struct
 
 open Tg_list;;

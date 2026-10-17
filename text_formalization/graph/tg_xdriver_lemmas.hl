@@ -9,6 +9,8 @@
 flyspeck_needs "graph/tg_subdiv_inv.hl";;
 flyspeck_needs "graph/tg_xlbthm.hl";;
 
+prioritize_num();;
+
 module Tg_xdriver_lemmas = struct
 
 open Tg_list;;

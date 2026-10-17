@@ -19,6 +19,8 @@ flyspeck_needs "graph/tg_enum_fast2.hl";;
 flyspeck_needs "graph/tg_leaf.hl";;
 flyspeck_needs "graph/tg_leaf_exec.hl";;
 
+prioritize_num();;
+
 module Tg_eval_db = struct
 
 open Tg_list;;
@@ -73,7 +75,7 @@ let XEXCESS_OF_EXEC =
   REWRITE_RULE[SQUANDER_TARGET]
     (PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] XEXCESS_OF);;
 
-needs "eval_compile.hl";;
+needs "graph/eval/eval_compile.hl";;
 
 (* Constants evaluated away in the rules (eval_compile cannot treat 0-ary    *)
 (* non-constructor constants as values).                                     *)

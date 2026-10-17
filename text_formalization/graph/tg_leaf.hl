@@ -33,6 +33,8 @@ flyspeck_needs "graph/tg_xlbthm.hl";;
 flyspeck_needs "graph/tg_xstats.hl";;
 flyspeck_needs "graph/tg_xdriver_lemmas.hl";;
 
+prioritize_num();;
+
 module Tg_leaf = struct
 
 open Tg_list;;

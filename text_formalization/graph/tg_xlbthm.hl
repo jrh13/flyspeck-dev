@@ -37,6 +37,8 @@ flyspeck_needs "graph/tg_lbthm.hl";;
 flyspeck_needs "graph/tg_newverts.hl";;
 flyspeck_needs "graph/tg_wf_inv.hl";;
 
+prioritize_num();;
+
 module Tg_xlbthm = struct
 
 open Tg_list;;

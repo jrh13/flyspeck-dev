@@ -1,6 +1,8 @@
 
 
 
+prioritize_num();;
+
 module Tg_eval_compiled = struct
 
 let COND_T = (standardize o prove)(`(if T then (t:A) else e) = t`, REWRITE_TAC[]) and

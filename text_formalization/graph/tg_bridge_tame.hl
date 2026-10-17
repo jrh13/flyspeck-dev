@@ -11,6 +11,8 @@
 
 flyspeck_needs "graph/tg_bridge_graph.hl";;
 
+prioritize_num();;
+
 module Tg_bridge_tame = struct
 
 open Tg_list;;

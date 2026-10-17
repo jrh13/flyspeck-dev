@@ -5,6 +5,8 @@
 (* general/the_kepler_conjecture.hl.                                         *)
 (* ========================================================================= *)
 
+prioritize_num();;
+
 module Tg_archive_bridge = struct
 
 let h_tame_classification = The_main_statement.tame_classification;;

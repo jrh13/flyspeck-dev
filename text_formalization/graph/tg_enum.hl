@@ -13,6 +13,8 @@
 needs "Library/rstc.ml";;
 flyspeck_needs "graph/tg_graph.hl";;
 
+prioritize_num();;
+
 module Tg_enum = struct
 
 open Tg_list;;
