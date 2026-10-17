@@ -19,7 +19,6 @@ open Tg_list;;
 open Tg_graph;;
 open Tg_enum;;
 open Tg_tame;;
-
 let FGRAPH = new_definition
  `FGRAPH g = MAP VERTICES (FACES g)`;;
 

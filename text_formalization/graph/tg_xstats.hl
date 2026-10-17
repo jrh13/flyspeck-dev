@@ -16,35 +16,8 @@ open Tg_tame;;
 open Tg_iso;;
 open Tg_exec;;
 open Tg_check;;
-open Tg_sound;;
-open Tg_mono;;
-open Tg_lbthm;;
-open Tg_isothm;;
-open Tg_newverts;;
-open Tg_archive_data;;
-open Tg_archive;;
-open Tg_main;;
-open Tg_hales_alias;;
-open Tg_archive_bridge;;
-open Tg_wf;;
-open Tg_wf_inv;;
-open Tg_bridge_defs;;
-open Tg_bridge_list;;
-open Tg_bridge_graph;;
-open Tg_bridge_tame;;
-open Tg_bridge_main;;
-open Tg_inv;;
 open Tg_xlb;;
 open Tg_xcheck;;
-open Tg_arcs;;
-open Tg_split_inv;;
-open Tg_enum_props;;
-open Tg_subdiv_inv;;
-open Tg_xlbthm;;
-open Tg_xdriver_lemmas;;
-open Tg_enum_fast;;
-open Tg_enum_fast2;;
-
 let XSTATS_ADD = new_definition
  `XSTATS_ADD f l =
     [EL 0 l + (if FINAL_FACE f /\ LENGTH (VERTICES f) = 3 then 1 else 0);

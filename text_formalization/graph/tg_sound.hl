@@ -22,7 +22,6 @@ open Tg_tame;;
 open Tg_iso;;
 open Tg_exec;;
 open Tg_check;;
-
 let REACH = new_definition
  `REACH p g g' <=> RTC (SUCCS_REL (NEXT_PLANE p)) g g'`;;
 

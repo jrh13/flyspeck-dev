@@ -21,7 +21,6 @@ open Tg_enum;;
 open Tg_tame;;
 open Tg_iso;;
 open Tg_exec;;
-
 (* ------------------------------------------------------------------------- *)
 (* The one structural invariant carried along the enumeration.               *)
 (* ------------------------------------------------------------------------- *)

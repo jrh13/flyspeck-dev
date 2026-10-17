@@ -21,9 +21,6 @@ open Tg_exec;;
 open Tg_check;;
 open Tg_sound;;
 open Tg_mono;;
-open Tg_lbthm;;
-open Tg_isothm;;
-open Tg_newverts;;
 open Tg_archive_data;;
 open Tg_archive;;
 open Tg_main;;
@@ -35,7 +32,6 @@ open Tg_bridge_defs;;
 open Tg_bridge_list;;
 open Tg_bridge_graph;;
 open Tg_bridge_tame;;
-
 let WF_GRAPH_PLANE_GRAPHS = prove
  (`!g. g IN PLANE_GRAPHS ==> WF_GRAPH g`,
   REWRITE_TAC[IN_PLANE_GRAPHS; GSYM REACH] THEN MESON_TAC[WF_GRAPH_REACH]);;

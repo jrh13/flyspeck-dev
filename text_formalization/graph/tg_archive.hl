@@ -15,19 +15,7 @@ flyspeck_needs "graph/tg_archive_data.hl";;
 module Tg_archive = struct
 
 open Tg_list;;
-open Tg_graph;;
-open Tg_enum;;
-open Tg_tame;;
-open Tg_iso;;
-open Tg_exec;;
-open Tg_check;;
-open Tg_sound;;
-open Tg_mono;;
-open Tg_lbthm;;
-open Tg_isothm;;
-open Tg_newverts;;
 open Tg_archive_data;;
-
 (* Do not echo the 4 MB definition: abbreviate long lists while loading.    *)
 
 let print_long_list =

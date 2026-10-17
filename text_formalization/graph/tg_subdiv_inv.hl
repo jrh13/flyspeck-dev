@@ -42,23 +42,12 @@ open Tg_isothm;;
 open Tg_newverts;;
 open Tg_archive_data;;
 open Tg_archive;;
-open Tg_main;;
-open Tg_hales_alias;;
-open Tg_archive_bridge;;
 open Tg_wf;;
 open Tg_wf_inv;;
-open Tg_bridge_defs;;
-open Tg_bridge_list;;
-open Tg_bridge_graph;;
-open Tg_bridge_tame;;
-open Tg_bridge_main;;
 open Tg_inv;;
-open Tg_xlb;;
-open Tg_xcheck;;
 open Tg_arcs;;
 open Tg_split_inv;;
 open Tg_enum_props;;
-
 (* ------------------------------------------------------------------------- *)
 (* List facts: subsequences, rotations, the pairs of ADJ_SOMES.              *)
 (* ------------------------------------------------------------------------- *)

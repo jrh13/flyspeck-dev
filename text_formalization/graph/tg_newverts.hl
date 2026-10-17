@@ -24,8 +24,6 @@ open Tg_check;;
 open Tg_sound;;
 open Tg_mono;;
 open Tg_lbthm;;
-open Tg_isothm;;
-
 let NEW_VERTS = define
  `NEW_VERTS n [] = 0 /\
   NEW_VERTS n (CONS NONE vos) = NEW_VERTS (SUC n) vos /\

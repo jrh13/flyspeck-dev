@@ -35,7 +35,6 @@ open Tg_exec;;
 open Tg_check;;
 open Tg_sound;;
 open Tg_mono;;
-
 (* ------------------------------------------------------------------------- *)
 (* The faces whose excess a certified vertex realises.                       *)
 (* ------------------------------------------------------------------------- *)

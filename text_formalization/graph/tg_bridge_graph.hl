@@ -26,19 +26,11 @@ open Tg_exec;;
 open Tg_check;;
 open Tg_sound;;
 open Tg_mono;;
-open Tg_lbthm;;
-open Tg_isothm;;
-open Tg_newverts;;
-open Tg_archive_data;;
-open Tg_archive;;
-open Tg_main;;
 open Tg_hales_alias;;
-open Tg_archive_bridge;;
 open Tg_wf;;
 open Tg_wf_inv;;
 open Tg_bridge_defs;;
 open Tg_bridge_list;;
-
 (* ------------------------------------------------------------------------- *)
 (* The representation maps are mutually inverse bijections.                  *)
 (* ------------------------------------------------------------------------- *)

@@ -23,9 +23,6 @@ open Tg_iso;;
 open Tg_exec;;
 open Tg_check;;
 open Tg_sound;;
-open Tg_mono;;
-open Tg_lbthm;;
-
 (* ------------------------------------------------------------------------- *)
 (* Congruent faces have the same congruence class.                           *)
 (* ------------------------------------------------------------------------- *)

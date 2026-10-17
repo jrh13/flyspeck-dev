@@ -18,17 +18,6 @@ open Tg_tame;;
 open Tg_iso;;
 open Tg_exec;;
 open Tg_check;;
-open Tg_sound;;
-open Tg_mono;;
-open Tg_lbthm;;
-open Tg_isothm;;
-open Tg_newverts;;
-open Tg_archive_data;;
-open Tg_archive;;
-open Tg_main;;
-open Tg_hales_alias;;
-open Tg_archive_bridge;;
-
 let WF_GRAPH = new_definition
  `WF_GRAPH g <=>
     FACE_LIST_LEN g /\

@@ -17,7 +17,6 @@ module Tg_enum = struct
 
 open Tg_list;;
 open Tg_graph;;
-
 (* ------------------------------------------------------------------------- *)
 (* Enumerating the index lists of a new inner face (Enumerator.thy).         *)
 (* ------------------------------------------------------------------------- *)

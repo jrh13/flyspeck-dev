@@ -21,12 +21,8 @@ open Tg_exec;;
 open Tg_check;;
 open Tg_sound;;
 open Tg_mono;;
-open Tg_lbthm;;
-open Tg_isothm;;
-open Tg_newverts;;
 open Tg_archive_data;;
 open Tg_archive;;
-
 let FINALS_SEED = prove
  (`!p. FINALS (SEED p) = [FACE (UPT 0 (MAX_GON p)) Final]`,
   REWRITE_TAC[FINALS; SEED; SEED_GRAPH_CLAUSES; FILTER; FINAL_FACE]);;
