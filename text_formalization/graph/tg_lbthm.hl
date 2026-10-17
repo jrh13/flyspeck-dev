@@ -22,6 +22,11 @@
 (* POLYGON_SIZE_WF and TFO_SIZE_CHECKED.                                     *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* The faces whose excess a certified vertex realises.                       *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_mono.hl";;
 
 prioritize_num();;
@@ -37,10 +42,6 @@ open Tg_exec;;
 open Tg_check;;
 open Tg_sound;;
 open Tg_mono;;
-(* ------------------------------------------------------------------------- *)
-(* The faces whose excess a certified vertex realises.                       *)
-(* ------------------------------------------------------------------------- *)
-
 let USED_FACES = new_definition
  `USED_FACES g v =
     if EXCEPT g v = 0 then FACES_AT g v

@@ -22,6 +22,11 @@
 (* edge (u,v) in another face at u (EDGES_SYM, FACES_AT_OK).                 *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* List facts: subsequences, rotations, the pairs of ADJ_SOMES.              *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_split_inv.hl";;
 flyspeck_needs "graph/tg_enum_props.hl";;
 flyspeck_needs "graph/tg_sound.hl";;
@@ -50,10 +55,6 @@ open Tg_inv;;
 open Tg_arcs;;
 open Tg_split_inv;;
 open Tg_enum_props;;
-(* ------------------------------------------------------------------------- *)
-(* List facts: subsequences, rotations, the pairs of ADJ_SOMES.              *)
-(* ------------------------------------------------------------------------- *)
-
 let SUBSEQ_MEM_IMP = prove
  (`!m l x:A. SUBSEQ l m /\ MEM x l ==> MEM x m`,
   LIST_INDUCT_TAC THEN GEN_TAC THEN

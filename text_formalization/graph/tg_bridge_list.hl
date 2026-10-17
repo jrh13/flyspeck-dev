@@ -9,6 +9,11 @@
 (* by a case split on the tail.                                              *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* Basic list combinators: cat, flatten, map, sumn.                          *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_bridge_defs.hl";;
 
 prioritize_num();;
@@ -25,10 +30,6 @@ open Tg_check;;
 open Tg_hales_alias;;
 open Tg_wf;;
 open Tg_bridge_defs;;
-(* ------------------------------------------------------------------------- *)
-(* Basic list combinators: cat, flatten, map, sumn.                          *)
-(* ------------------------------------------------------------------------- *)
-
 let H_CAT = prove
  (`!l1 l2:A list. cat l1 l2 = APPEND l1 l2`,
   LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[h_cat; APPEND]);;

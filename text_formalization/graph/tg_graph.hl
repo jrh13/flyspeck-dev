@@ -9,6 +9,11 @@
 (* Vertices are numbers; a graph is GRAPH faces count faceListAt heights.    *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* Types.                                                                    *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_list.hl";;
 
 prioritize_num();;
@@ -16,10 +21,6 @@ prioritize_num();;
 module Tg_graph = struct
 
 open Tg_list;;
-(* ------------------------------------------------------------------------- *)
-(* Types.                                                                    *)
-(* ------------------------------------------------------------------------- *)
-
 let facetype_INDUCT,facetype_RECURSION = define_type
   "facetype = Final | Nonfinal";;
 

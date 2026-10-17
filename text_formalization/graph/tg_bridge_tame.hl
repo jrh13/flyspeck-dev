@@ -9,6 +9,11 @@
 (* tame_bridge_list.ml.                                                      *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* The face graph and the quantifications over faces and vertices.           *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_bridge_graph.hl";;
 
 prioritize_num();;
@@ -30,10 +35,6 @@ open Tg_wf_inv;;
 open Tg_bridge_defs;;
 open Tg_bridge_list;;
 open Tg_bridge_graph;;
-(* ------------------------------------------------------------------------- *)
-(* The face graph and the quantifications over faces and vertices.           *)
-(* ------------------------------------------------------------------------- *)
-
 let H_FGRAPH = prove
  (`!g. fgraph (HGRAPH g) = FGRAPH g`,
   REWRITE_TAC[h_fgraph; FGRAPH; H_FACES; GSYM MAP_o] THEN

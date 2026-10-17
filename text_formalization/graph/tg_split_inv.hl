@@ -18,6 +18,9 @@
 (* be adjacent.  The edge facts come from tame_arcs.ml.                      *)
 (* ========================================================================= *)
 
+
+(* the new vertices of a split with k new vertices *)
+
 flyspeck_needs "graph/tg_arcs.hl";;
 flyspeck_needs "graph/tg_mono.hl";;
 flyspeck_needs "graph/tg_lbthm.hl";;
@@ -41,8 +44,6 @@ open Tg_wf;;
 open Tg_wf_inv;;
 open Tg_inv;;
 open Tg_arcs;;
-(* the new vertices of a split with k new vertices *)
-
 let NEW_VS = new_definition
  `NEW_VS g k = UPT (COUNT_VERTICES g) (COUNT_VERTICES g + k)`;;
 

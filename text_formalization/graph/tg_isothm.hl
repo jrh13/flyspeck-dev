@@ -11,6 +11,11 @@
 (* tame_sound.ml.                                                            *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* Congruent faces have the same congruence class.                           *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_sound.hl";;
 
 prioritize_num();;
@@ -25,10 +30,6 @@ open Tg_iso;;
 open Tg_exec;;
 open Tg_check;;
 open Tg_sound;;
-(* ------------------------------------------------------------------------- *)
-(* Congruent faces have the same congruence class.                           *)
-(* ------------------------------------------------------------------------- *)
-
 let CONG_CLASS_EQ = prove
  (`!xs ys:A list. CONG xs ys ==> CONG_CLASS xs = CONG_CLASS ys`,
   REPEAT STRIP_TAC THEN REWRITE_TAC[CONG_CLASS; EXTENSION; IN_ELIM_THM] THEN

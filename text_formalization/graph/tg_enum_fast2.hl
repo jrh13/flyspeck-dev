@@ -7,6 +7,10 @@
 (* are kept verbatim.                                                        *)
 (* ========================================================================= *)
 
+
+(* positions i < j on rot = ROTATE_TO v (VERTICES f) and nbrs =             *)
+(* MAP (NEIGHBORS g) rot: directed lengths j - i and LENGTH rot - (j - i)    *)
+
 flyspeck_needs "graph/tg_lbthm.hl";;
 flyspeck_needs "graph/tg_isothm.hl";;
 flyspeck_needs "graph/tg_enum_props.hl";;
@@ -36,8 +40,6 @@ open Tg_inv;;
 open Tg_arcs;;
 open Tg_enum_props;;
 open Tg_enum_fast;;
-(* positions i < j on rot = ROTATE_TO v (VERTICES f) and nbrs =             *)
-(* MAP (NEIGHBORS g) rot: directed lengths j - i and LENGTH rot - (j - i)    *)
 let DUP_EDGE_IDX = new_definition
  `DUP_EDGE_IDX (rot:num list) (nbrs:(num list)list) i j <=>
     2 <= j - i /\ 2 <= LENGTH rot - (j - i) /\ MEM (EL j rot) (EL i nbrs)`;;

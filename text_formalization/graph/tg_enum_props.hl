@@ -9,6 +9,9 @@
 (* the skeleton are kept exactly.                                           *)
 (* ========================================================================= *)
 
+
+(* l1 is a subsequence of l2 *)
+
 flyspeck_needs "graph/tg_inv.hl";;
 flyspeck_needs "graph/tg_newverts.hl";;
 flyspeck_needs "graph/tg_arcs.hl";;
@@ -38,8 +41,6 @@ open Tg_wf;;
 open Tg_wf_inv;;
 open Tg_inv;;
 open Tg_arcs;;
-(* l1 is a subsequence of l2 *)
-
 let SUBSEQ = define
  `SUBSEQ [] (l:A list) = T /\
   SUBSEQ (CONS x xs) [] = F /\

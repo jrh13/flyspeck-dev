@@ -10,6 +10,9 @@
 (* enumeration), proved by agents.                                           *)
 (* ========================================================================= *)
 
+
+(* The directed edges of a face: every vertex with its successor.            *)
+
 flyspeck_needs "graph/tg_wf.hl";;
 
 prioritize_num();;
@@ -24,8 +27,6 @@ open Tg_iso;;
 open Tg_exec;;
 open Tg_check;;
 open Tg_wf;;
-(* The directed edges of a face: every vertex with its successor.            *)
-
 let EDGES = new_definition
  `EDGES f = MAP (\x. (x, NEXT_VERTEX f x)) (VERTICES f)`;;
 

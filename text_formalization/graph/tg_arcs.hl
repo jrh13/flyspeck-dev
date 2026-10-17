@@ -22,6 +22,11 @@
 (* failure case, and the form of the k = 0 hypothesis of SPLIT_FACE_INV).    *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* Distinctness is invariant under rotation and reversal.                    *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_inv.hl";;
 flyspeck_needs "graph/tg_wf_inv.hl";;
 flyspeck_needs "graph/tg_lbthm.hl";;
@@ -43,10 +48,6 @@ open Tg_lbthm;;
 open Tg_wf;;
 open Tg_wf_inv;;
 open Tg_inv;;
-(* ------------------------------------------------------------------------- *)
-(* Distinctness is invariant under rotation and reversal.                    *)
-(* ------------------------------------------------------------------------- *)
-
 let DISTINCT_ROTATE1 = prove
  (`!l:A list. DISTINCT (ROTATE1 l) <=> DISTINCT l`,
   LIST_INDUCT_TAC THEN

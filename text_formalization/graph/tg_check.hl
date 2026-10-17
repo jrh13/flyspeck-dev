@@ -11,6 +11,11 @@
 (* tame_sound.ml (interface) and the proof files.                            *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* The one structural invariant carried along the enumeration.               *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_exec.hl";;
 
 prioritize_num();;
@@ -23,10 +28,6 @@ open Tg_enum;;
 open Tg_tame;;
 open Tg_iso;;
 open Tg_exec;;
-(* ------------------------------------------------------------------------- *)
-(* The one structural invariant carried along the enumeration.               *)
-(* ------------------------------------------------------------------------- *)
-
 let FACE_LIST_LEN = new_definition
  `FACE_LIST_LEN g <=> LENGTH(FACE_LIST_AT g) = COUNT_VERTICES g`;;
 

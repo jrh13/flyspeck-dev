@@ -14,6 +14,11 @@
 (* face type.                                                                *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* List facts.                                                               *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_wf.hl";;
 flyspeck_needs "graph/tg_sound.hl";;
 flyspeck_needs "graph/tg_mono.hl";;
@@ -32,10 +37,6 @@ open Tg_check;;
 open Tg_sound;;
 open Tg_mono;;
 open Tg_wf;;
-(* ------------------------------------------------------------------------- *)
-(* List facts.                                                               *)
-(* ------------------------------------------------------------------------- *)
-
 let MEM_REVERSE = prove
  (`!l x:A. MEM x (REVERSE l) <=> MEM x l`,
   LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[REVERSE; MEM; MEM_APPEND] THEN

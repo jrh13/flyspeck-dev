@@ -12,6 +12,11 @@
 (* unconditional statements are not provable.  H_NEXT_PLANE is unaffected.   *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* The representation maps are mutually inverse bijections.                  *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_bridge_list.hl";;
 flyspeck_needs "graph/tg_wf_inv.hl";;
 
@@ -33,10 +38,6 @@ open Tg_wf;;
 open Tg_wf_inv;;
 open Tg_bridge_defs;;
 open Tg_bridge_list;;
-(* ------------------------------------------------------------------------- *)
-(* The representation maps are mutually inverse bijections.                  *)
-(* ------------------------------------------------------------------------- *)
-
 let HFACE_OFACE = prove
  (`!p. HFACE (OFACE p) = p`,
   REWRITE_TAC[FORALL_PAIR_THM; HFACE; OFACE; VERTICES] THEN

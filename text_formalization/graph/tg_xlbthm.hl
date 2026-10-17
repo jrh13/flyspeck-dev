@@ -31,6 +31,14 @@
 (* SQUANDER_FACE i more.                                                     *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* List helpers: MIN_LIST, FLAT (MAP ..), a summand of a sum, FILTER of a    *)
+(* list all of whose members satisfy the predicate, FILTER as a              *)
+(* sub-multiset, sums of conditionals, w = c + (w - c), counts in a distinct *)
+(* list, members of a non-empty list.                                        *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_xlb.hl";;
 flyspeck_needs "graph/tg_subdiv_inv.hl";;
 flyspeck_needs "graph/tg_lbthm.hl";;
@@ -63,13 +71,6 @@ open Tg_arcs;;
 open Tg_split_inv;;
 open Tg_enum_props;;
 open Tg_subdiv_inv;;
-(* ------------------------------------------------------------------------- *)
-(* List helpers: MIN_LIST, FLAT (MAP ..), a summand of a sum, FILTER of a    *)
-(* list all of whose members satisfy the predicate, FILTER as a              *)
-(* sub-multiset, sums of conditionals, w = c + (w - c), counts in a distinct *)
-(* list, members of a non-empty list.                                        *)
-(* ------------------------------------------------------------------------- *)
-
 let MIN_LIST_LE_MEM = prove
  (`!d (x:num) l. MEM x l ==> MIN_LIST d l <= x`,
   GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN

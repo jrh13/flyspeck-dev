@@ -9,6 +9,9 @@
 (* the driver: the k-th graph of the i-th chunk is a member of ARCHIVE.      *)
 (* ========================================================================= *)
 
+
+(* Do not echo the 4 MB definition: abbreviate long lists while loading.    *)
+
 flyspeck_needs "graph/tg_list.hl";;
 flyspeck_needs "graph/tg_archive_data.hl";;
 
@@ -18,8 +21,6 @@ module Tg_archive = struct
 
 open Tg_list;;
 open Tg_archive_data;;
-(* Do not echo the 4 MB definition: abbreviate long lists while loading.    *)
-
 let print_long_list =
   let rec dest n tm acc =
     if n <= 0 then (rev acc, true) else

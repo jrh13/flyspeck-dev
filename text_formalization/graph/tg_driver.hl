@@ -11,6 +11,11 @@
 (* Requires the generated evaluator (the f_ functions) to be loaded.         *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* Certificate parsing.                                                      *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_sound.hl";;
 flyspeck_needs "graph/tg_mono.hl";;
 flyspeck_needs "graph/tg_lbthm.hl";;
@@ -56,10 +61,6 @@ open Tg_leaf;;
 open Tg_leaf_exec;;
 open Tg_eval_support;;
 open Tg_eval_db;;
-(* ------------------------------------------------------------------------- *)
-(* Certificate parsing.                                                      *)
-(* ------------------------------------------------------------------------- *)
-
 type disposition =
   | Child
   | Prune_vcount

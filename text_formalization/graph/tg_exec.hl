@@ -8,6 +8,11 @@
 (* specification definitions; nothing is redefined.                          *)
 (* ========================================================================= *)
 
+
+(* ------------------------------------------------------------------------- *)
+(* Eliminating let, also with pair and triple patterns.                      *)
+(* ------------------------------------------------------------------------- *)
+
 flyspeck_needs "graph/tg_iso.hl";;
 
 prioritize_num();;
@@ -19,10 +24,6 @@ open Tg_graph;;
 open Tg_enum;;
 open Tg_tame;;
 open Tg_iso;;
-(* ------------------------------------------------------------------------- *)
-(* Eliminating let, also with pair and triple patterns.                      *)
-(* ------------------------------------------------------------------------- *)
-
 let LET_ELIM_THM = prove
  (`(!(P:A->D) (e:A). (let x = e in P x) = P e) /\
    (!(P:A->B->D) (e:A#B). (let x,y = e in P x y) = P (FST e) (SND e)) /\

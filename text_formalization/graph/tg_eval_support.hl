@@ -11,6 +11,11 @@
 (* ========================================================================= *)
 
 flyspeck_needs "graph/tg_check.hl";;
+needs "Formal_ineqs/arith_options.hl";;
+Arith_options.base := 200;;
+Arith_options.cached := false;;
+needs "Formal_ineqs/arith/arith_nat.hl";;
+needs "graph/eval/eval_support.hl";;
 
 prioritize_num();;
 
@@ -23,12 +28,6 @@ open Tg_tame;;
 open Tg_iso;;
 open Tg_exec;;
 open Tg_check;;
-needs "Formal_ineqs/arith_options.hl";;
-Arith_options.base := 200;;
-Arith_options.cached := false;;
-needs "Formal_ineqs/arith/arith_nat.hl";;
-needs "graph/eval/eval_support.hl";;
-
 let f_SUC =
   let op = Misc_vars.suc_op_num in
   fun a opt -> trans_opt opt (Arith_nat.raw_suc_conv_hash (mk_comb (op, a)));;

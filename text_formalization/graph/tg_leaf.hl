@@ -29,6 +29,10 @@
 (* (XSTATS_DISTINCT_SAME_MEM).  TFO_LEAF_PROVED is agent leaf's.             *)
 (* ========================================================================= *)
 
+
+(* arcs of CONS (SOME v) vos: (a, k, b, base) for consecutive chosen         *)
+(* vertices a, b with k new vertices between them, numbered base .. base+k-1 *)
+
 flyspeck_needs "graph/tg_xlbthm.hl";;
 flyspeck_needs "graph/tg_xstats.hl";;
 flyspeck_needs "graph/tg_xdriver_lemmas.hl";;
@@ -63,8 +67,6 @@ open Tg_subdiv_inv;;
 open Tg_xlbthm;;
 open Tg_xdriver_lemmas;;
 open Tg_xstats;;
-(* arcs of CONS (SOME v) vos: (a, k, b, base) for consecutive chosen         *)
-(* vertices a, b with k new vertices between them, numbered base .. base+k-1 *)
 let ARCS_REC = define
  `ARCS_REC (a:num) (k:num) (base:num) [] = [] /\
   ARCS_REC a k base (CONS NONE vos) = ARCS_REC a (k + 1) base vos /\
