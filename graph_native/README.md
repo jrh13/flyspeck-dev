@@ -69,52 +69,79 @@ same `archive_all.ml` data), the histories are expected to coincide, but this
 has to be checked once by comparing a producer digest (e.g. for Tri) against
 an in-build computation before trusting the list.
 
-## Important finding: full_digest cannot digest the archive statements
+## The digest route: simple_digest, not full_digest
 
-Flyspeck's import (`general/serialization.hl`, `mk_deserialize_thm`) looks a
-theorem up by `full_digest_thm`, which walks the full definitional history of
-every constant in the statement.  For `TFO ARCHIVE p (SEED p)` that history
-includes the definition of `ARCHIVE` / `tame_archive_lists` -- the whole
-archive -- and `full_digest_thm` overflows the stack on it (even with
-`ulimit -s unlimited`).  This is the same wall Flyspeck itself hit: its
-`check_graph_md5` for `import_tame_classification`/`archive` in
-`general/the_kepler_conjecture.hl` is commented out with the note that these
-are "too big a term".  (The serialization stack otherwise compiles and runs
-natively here: the digest self-test `simple_digest_thm (canonize_thm
-REAL_LE_TRANS)` reproduces Flyspeck's reference `0a27c9...`, and the producer
-`native_digest.ml` proves and reaches the digest step; only `full_digest` of
-the archive statement overflows.)
+Flyspeck's standard import (`general/serialization.hl`, `mk_deserialize_thm`)
+keys on `full_digest_thm`, which walks the full definitional history of every
+constant in the statement.  For `TFO ARCHIVE p (SEED p)` that history includes
+the whole archive (`ARCHIVE` / `tame_archive_lists`), and `full_digest_thm`
+overflows the stack on it even with `ulimit -s unlimited`.  This is the same
+wall Flyspeck itself hit: its `check_graph_md5` for the archive in
+`general/the_kepler_conjecture.hl` is commented out as "too big a term".
 
-So the four class theorems cannot enter the build by the standard
-`full_digest` serialization.  The realistic options:
+The graph serialization route therefore keys on `simple_digest_thm` -- the
+digest of the canonicalized STATEMENT, with `ARCHIVE` left opaque as a
+constant, which is small and tractable.  This is sound here because:
 
-1. A graph-specific import keyed on `simple_digest_thm` (the statement digest
-   only, with `ARCHIVE` left opaque as a constant -- tractable).  Sound given
-   the chapter is loaded in-build (which fixes every definition) and the
-   native run attests the statements; weaker than full_digest only in that it
-   does not re-derive the definitional history, which the loaded chapter
-   already pins.
-2. Keep the four `TFO ARCHIVE p (SEED p)` as explicit inputs installed by the
-   native domains runner (`set_class_theorems`), with the native run
-   (`tame_final16`, 1 h 32 min) as the attestation; the in-build bridge then
-   composes `|- import_tame_classification` (already verified).
+- the chapter is loaded in-build, which pins the definitions of `TFO`,
+  `ARCHIVE`, `SEED` and everything they depend on, so the statement digest
+  identifies exactly one proposition;
+- the four statements imported are read directly off
+  `IMPORT_TAME_CLASSIFICATION_FROM_RUNS`, so the term imported is exactly the
+  one the composition consumes; and
+- the digests recorded are generated in a chapter session by the import
+  mechanism itself (`Tg_graph_import.class_digest`), of exactly those four
+  statements, which the domains route below proves are theorems with no axiom.
 
-Both are small; which to use is a trust-model choice for the PR.
+The import is `text_formalization/graph/tg_graph_import.hl`; the frozen digests
+are in `text_formalization/general/theorem_graph_digest.hl`:
+
+    class 0 (Tri)   TFO ARCHIVE 0 (SEED 0)   1cb82eb1a1c21b561fcdf954ed7e500b
+    class 1 (Quad)  TFO ARCHIVE 1 (SEED 1)   fc0f86d55d4d1fcaec834a17e6493ca1
+    class 2 (Pent)  TFO ARCHIVE 2 (SEED 2)   31346fc2cd6bf57ef81da73a4166f5e6
+    class 3 (Hex)   TFO ARCHIVE 3 (SEED 3)   5a320c2d9c575d00fde2335e1cc6173c
+
+The trust anchor is a single explicit axiom, `graph_deserialization`, built by
+the same type-definition hack as Flyspeck's `deserialization` but with its own
+type/constant names, so the two import routes stay independent.  A theorem is
+conjured only after its statement digest is found in the frozen list.
+
+## The two routes
+
+1. Domains (no extra axiom).  The native runner proves all four classes in one
+   OCaml-5 process and installs them with
+   `Tg_classification.set_class_theorems`; the bridge composes
+   `|- import_tame_classification` resting only on HOL Light's axioms.  Measured
+   1 h 32 min; two independent runs produced
+   `FINAL_THM |- import_tame_classification (hypotheses 0)`.
+2. Serialization (one explicit axiom).  Run the four classes in separate
+   sessions, record their statement digests, and import them in-build under
+   `graph_deserialization`.  This is the analogue of Flyspeck's serialized
+   nonlinear inequalities; the build sequence is
+   `Build.build_sequence_graph_serial`.
 
 ## Status
 
-- `certgen`: built, reads Flyspeck's archive, reproduces the certificates
-  (`./certgen 0` = the Tri certificate, 29,690 lines / 501 matches).
-- Serialization stack: compiles and runs natively (digest self-test passes);
-  blocked only by the archive-size wall above for `full_digest`.
-- Producer: the standalone project proves all four `TFO ARCHIVE p (SEED p)`
-  and composes `|- import_tame_classification` in 1 h 32 min
-  (`native_build5/tame_final16`); `pkg_root/native_digest.ml` is that runner
-  with a digest printer (currently `simple_digest_thm`; switch to
-  `full_digest_thm` with the vendored serialization stack per above).
-- Remaining: vendor the serialization stack into the producer, validate the
-  Tri `full_digest` against an in-build value, run all four classes to emit
-  `general/theorem_graph_digest.hl`, and add the serialization import to
-  `graph/tg_classification.hl` (installing the deserialized theorems via
-  `set_class_theorems`).  The in-build bridge composition is already
-  verified (graph/tg_classification.hl).
+- `certgen`: built, reproduces the certificates (`./certgen 0` = the Tri
+  certificate, 29,690 lines / 501 matches).
+- Prover: the native domains runner proves the four classes and composes
+  `FINAL_THM |- import_tame_classification` with no axiom (two independent
+  runs; 1 h 32 min).  This is the provenance that the four statements are
+  theorems.
+- Digests: `general/theorem_graph_digest.hl` is generated in a chapter session
+  by `Tg_graph_import.class_digest` -- the same `simple_digest` the in-build
+  import checks, of the four statements read off
+  `IMPORT_TAME_CLASSIFICATION_FROM_RUNS`.  (The native build's own serializer
+  prints a different hex for the same proposition, because its base-200
+  numerals and vendored serialization copy are a different term/implementation
+  than the chapter's; the chapter value is the one the importer checks, so it
+  is the one frozen.)
+- Import: `graph/tg_graph_import.hl` conjures each class under
+  `graph_deserialization` and checks its statement digest against the frozen
+  list; it can only conjure the four statements read off
+  `IMPORT_TAME_CLASSIFICATION_FROM_RUNS`.  `install ()` makes it the source for
+  `graph_classification ()`.  Wired into `Build.build_sequence_graph_serial`.
+- Validated in a chapter session (flytame image, chapter loaded):
+  `graph_classification ()` returns `|- import_tame_classification`, 0
+  hypotheses, resting on `graph_deserialization` and HOL Light's three standard
+  axioms, and nothing else.

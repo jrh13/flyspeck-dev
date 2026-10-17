@@ -1,0 +1,30 @@
+(* ========================================================================= *)
+(* general/theorem_graph_digest.hl                                           *)
+(*                                                                           *)
+(* For use with graph/tg_graph_import.hl (the serialization route of the     *)
+(* tame-graph classification), analogous to theorem_nonlinear_digest.hl.     *)
+(*                                                                           *)
+(* The statement digests (Serialization.simple_digest o Serialization.       *)
+(* canonize) of the four class statements TFO ARCHIVE p (SEED p), p = 0..3,  *)
+(* with the archive left as the opaque constant ARCHIVE.  They are generated *)
+(* in a chapter session by Tg_graph_import.class_digest (graph/              *)
+(* tg_graph_import.hl), the same simple_digest the in-build import checks,    *)
+(* taken of the four statements read off IMPORT_TAME_CLASSIFICATION_FROM_RUNS *)
+(* -- so tg_graph_import.hl can only conjure exactly these four, and imports  *)
+(* class p only if its statement digest appears here.  Those four statements *)
+(* are theorems: the native proof-producing enumeration (../../graph_native) *)
+(* proves all four and composes import_tame_classification with no axiom.    *)
+(* ========================================================================= *)
+
+module Theorem_graph_digest = struct
+
+ let digest_list = map snd ([
+
+   "TFO ARCHIVE 0 (SEED 0)", "1cb82eb1a1c21b561fcdf954ed7e500b";
+   "TFO ARCHIVE 1 (SEED 1)", "fc0f86d55d4d1fcaec834a17e6493ca1";
+   "TFO ARCHIVE 2 (SEED 2)", "31346fc2cd6bf57ef81da73a4166f5e6";
+   "TFO ARCHIVE 3 (SEED 3)", "5a320c2d9c575d00fde2335e1cc6173c";
+
+ ] : (string * string) list);;
+
+end;;

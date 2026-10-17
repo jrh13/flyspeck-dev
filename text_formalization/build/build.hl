@@ -450,6 +450,18 @@ let build_sequence_graph =
     "graph/tg_eval_compiled.hl"; "graph/tg_driver.hl";
     "graph/tg_bridge_archive.hl"; "graph/tg_classification.hl" ];;
 
+(* The serialization route: the same chapter, plus the frozen class-theorem
+   digests and the import that conjures the four TFO ARCHIVE p (SEED p) under
+   the explicit graph_deserialization axiom (keyed on the statement digest).
+   This is to the domains route (../graph_native, which installs the real
+   theorems with no axiom) as build_sequence_the_nonlinear_inequalities is to
+   build_sequence_main_statement.  Loading it makes graph_classification ()
+   return |- import_tame_classification on a single machine. *)
+
+let build_sequence_graph_serial =
+  build_sequence_graph @
+  [ "general/theorem_graph_digest.hl"; "graph/tg_graph_import.hl" ];;
+
 
 
 end;;
