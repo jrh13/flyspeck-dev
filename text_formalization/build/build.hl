@@ -429,6 +429,19 @@ let build_sequence_nonserial =
    domains runner (../graph_native) or imported from the serialized digests;
    until a source is installed, graph_classification () reports that. *)
 
+(* Only the specification + bridge layer is loaded in-build: the files needed
+   to compose |- import_tame_classification from the four class theorems.  The
+   enumeration/soundness EXECUTABLE layer (the proof-producing evaluator, the
+   driver, the completion-lower-bound and leaf machinery: tg_eval_*, tg_driver,
+   tg_leaf*, tg_enum_fast*, tg_xlb*, tg_x*, tg_inv, tg_newverts, tg_isothm,
+   tg_lbthm, ...) runs NATIVELY in ../graph_native (off the pkg/ copies) and is
+   NOT loaded here -- it is unused by both in-build routes (the domains route
+   proves natively; the serialization route imports), and several of those
+   files use short variable names (e.g. rot) that collide with the ssreflect
+   seq library once the full Flyspeck library is present.  They remain in
+   graph/ as the ported development.  The list below is the dependency closure
+   of tg_classification.hl, in load order. *)
+
 let build_sequence_graph =
   let (through_kepler, _) =
     cut_at "nonlinear/mk_all_ineq.hl" [] build_sequence_full in
@@ -436,18 +449,11 @@ let build_sequence_graph =
   [ "graph/tg_list.hl"; "graph/tg_graph.hl"; "graph/tg_enum.hl";
     "graph/tg_tame.hl"; "graph/tg_iso.hl"; "graph/tg_exec.hl";
     "graph/tg_check.hl"; "graph/tg_sound.hl"; "graph/tg_mono.hl";
-    "graph/tg_lbthm.hl"; "graph/tg_isothm.hl"; "graph/tg_newverts.hl";
     "graph/tg_archive_data.hl"; "graph/tg_archive.hl"; "graph/tg_main.hl";
-    "graph/tg_hales_alias.hl"; "graph/tg_archive_bridge.hl"; "graph/tg_wf.hl";
-    "graph/tg_wf_inv.hl"; "graph/tg_bridge_defs.hl"; "graph/tg_bridge_list.hl";
-    "graph/tg_bridge_graph.hl"; "graph/tg_bridge_tame.hl";
-    "graph/tg_bridge_main.hl"; "graph/tg_inv.hl"; "graph/tg_xlb.hl";
-    "graph/tg_xcheck.hl"; "graph/tg_arcs.hl"; "graph/tg_split_inv.hl";
-    "graph/tg_enum_props.hl"; "graph/tg_subdiv_inv.hl"; "graph/tg_xlbthm.hl";
-    "graph/tg_xdriver_lemmas.hl"; "graph/tg_enum_fast.hl";
-    "graph/tg_enum_fast2.hl"; "graph/tg_xstats.hl"; "graph/tg_leaf.hl";
-    "graph/tg_leaf_exec.hl"; "graph/tg_eval_support.hl"; "graph/tg_eval_db.hl";
-    "graph/tg_eval_compiled.hl"; "graph/tg_driver.hl";
+    "graph/tg_wf.hl"; "graph/tg_hales_alias.hl"; "graph/tg_bridge_defs.hl";
+    "graph/tg_bridge_list.hl"; "graph/tg_wf_inv.hl"; "graph/tg_bridge_graph.hl";
+    "graph/tg_bridge_tame.hl"; "graph/tg_archive_bridge.hl";
+    "graph/tg_bridge_main.hl"; "graph/tg_eval_support.hl";
     "graph/tg_bridge_archive.hl"; "graph/tg_classification.hl" ];;
 
 (* The serialization route: the same chapter, plus the frozen class-theorem
