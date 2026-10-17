@@ -1,0 +1,144 @@
+(* ========================================================================= *)
+(* tame/tame_check.ml                                                        *)
+(*                                                                           *)
+(* The checks evaluated at the nodes of the certificate-driven search tree:  *)
+(* the lower bound LB_S g cs from a certificate list cs of final vertices    *)
+(* with its side conditions LB_CERT_OK (vertices in range and final, face   *)
+(* lists distinct and made of faces of g, no common face of size <= 4), the  *)
+(* degree pruning test, the executable (ALL-quantified) forms of the         *)
+(* tameness conditions on final graphs, the length invariant of the face     *)
+(* list table and the isomorphism certificate.  Soundness theorems are in    *)
+(* tame_sound.ml (interface) and the proof files.                            *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_exec.hl";;
+
+module Tg_check = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+
+(* ------------------------------------------------------------------------- *)
+(* The one structural invariant carried along the enumeration.               *)
+(* ------------------------------------------------------------------------- *)
+
+let FACE_LIST_LEN = new_definition
+ `FACE_LIST_LEN g <=> LENGTH(FACE_LIST_AT g) = COUNT_VERTICES g`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Executable forms of the quantified tameness conditions.                   *)
+(* ------------------------------------------------------------------------- *)
+
+let TAME11A_ALL = prove
+ (`!g. TAME11A g <=> ALL (\v. 3 <= DEGREE g v) (VERTICES_GRAPH g)`,
+  REWRITE_TAC[TAME11A; GSYM ALL_MEM]);;
+
+let TAME11B_ALL = prove
+ (`!g. TAME11B g <=>
+       ALL (\v. DEGREE g v <= (if EXCEPT g v = 0 then 7 else 6))
+           (VERTICES_GRAPH g)`,
+  REWRITE_TAC[TAME11B; GSYM ALL_MEM]);;
+
+let TAME12O_ALL = prove
+ (`!g. TAME12O g <=>
+       ALL (\v. EXCEPT g v = 0 \/ ~(DEGREE g v = 6) \/
+                TRI g v = 5 /\ QUAD g v = 0 /\ EXCEPT g v = 1)
+           (VERTICES_GRAPH g)`,
+  REWRITE_TAC[TAME12O; GSYM ALL_MEM; VERTEX_TYPE; PAIR_EQ] THEN
+  MESON_TAC[]);;
+
+let TAME9A_ALL = prove
+ (`!g. TAME9A g <=>
+       ALL (\f. 3 <= LENGTH(VERTICES f) /\ LENGTH(VERTICES f) <= 6) (FACES g)`,
+  REWRITE_TAC[TAME9A; GSYM ALL_MEM]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Pruning by vertex count and degree.                                       *)
+(* ------------------------------------------------------------------------- *)
+
+let DEGREE_PRUNED = new_definition
+ `DEGREE_PRUNED g v <=>
+    v < COUNT_VERTICES g /\
+    (7 < DEGREE g v \/ 6 < DEGREE g v /\ ~(EXCEPT g v = 0))`;;
+
+(* ------------------------------------------------------------------------- *)
+(* The lower-bound certificate.                                              *)
+(* ------------------------------------------------------------------------- *)
+
+let LB_CERT_VERTEX_OK = new_definition
+ `LB_CERT_VERTEX_OK g v <=>
+    v < COUNT_VERTICES g /\ FINAL_VERTEX g v /\ DISTINCT (FACES_AT g v) /\
+    ALL (\f. MEM f (FACES g)) (FACES_AT g v)`;;
+
+let SEPARATED_PAIR = new_definition
+ `SEPARATED_PAIR g u v <=>
+    ALL (\f. 4 < LENGTH(VERTICES f) \/ ~MEM f (FACES_AT g v)) (FACES_AT g u)`;;
+
+let SEPARATED_LIST = define
+ `SEPARATED_LIST g [] = T /\
+  SEPARATED_LIST g (CONS v vs) =
+    (ALL (SEPARATED_PAIR g v) vs /\ SEPARATED_LIST g vs)`;;
+
+let LB_CERT_OK = new_definition
+ `LB_CERT_OK g cs <=>
+    DISTINCT cs /\ ALL (LB_CERT_VERTEX_OK g) cs /\ SEPARATED_LIST g cs`;;
+
+let LB_S = new_definition
+ `LB_S g cs = FACE_SQUANDER_LOWER_BOUND g + LIST_SUM (EXCESS_AT g) cs`;;
+
+(* The lower bound of a size-i successor family and of a final graph.        *)
+
+let SIZE_PRUNED = new_definition
+ `SIZE_PRUNED g cs i <=> SQUANDER_TARGET <= LB_S g cs + SQUANDER_FACE i`;;
+
+let LB_PRUNED = new_definition
+ `LB_PRUNED g cs <=> SQUANDER_TARGET <= LB_S g cs`;;
+
+
+(* ------------------------------------------------------------------------- *)
+(* The isomorphism certificate for a final graph: the vertex map phi as the  *)
+(* list of images of 0..n-1, whether the archive faces are reversed, and for *)
+(* each face of either side the index and rotation of its partner.           *)
+(* ------------------------------------------------------------------------- *)
+
+let APPLY_MAP = new_definition
+ `APPLY_MAP (phi:num list) v = EL v phi`;;
+
+let FACE_MATCH = new_definition
+ `FACE_MATCH (phi:num list) (fs2:((num)list)list) (f:num list)
+            (j:num,r:num) <=>
+    j < LENGTH fs2 /\ ROTATE r (MAP (APPLY_MAP phi) f) = EL j fs2`;;
+
+let FACE_MATCH_BACK = new_definition
+ `FACE_MATCH_BACK (phi:num list) (fs1:((num)list)list) (f2:num list)
+                 (i:num,r:num) <=>
+    i < LENGTH fs1 /\ ROTATE r (MAP (APPLY_MAP phi) (EL i fs1)) = f2`;;
+
+let ISO_CERT_OK = new_definition
+ `ISO_CERT_OK (fs1:((num)list)list) (fs2:((num)list)list)
+             (phi:num list,rv:bool,m1:(num#num)list,m2:(num#num)list) <=>
+    let fs2' = if rv then MAP REVERSE fs2 else fs2 in
+    ALL (ALL (\v. v < LENGTH phi)) fs1 /\ DISTINCT phi /\
+    LENGTH m1 = LENGTH fs1 /\ ALL2 (FACE_MATCH phi fs2') fs1 m1 /\
+    LENGTH m2 = LENGTH fs2' /\ ALL2 (FACE_MATCH_BACK phi fs1) fs2' m2`;;
+
+let ISO_CERT_OK_EXEC = PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] ISO_CERT_OK;;
+
+(* The polygon sizes tried at a node (Plane1: 3 .. p+3).                    *)
+
+let POLY_SIZES = new_definition
+ `POLY_SIZES p = UPT 3 (SUC(MAX_GON p))`;;
+
+(* Fused form of the separation test.                                        *)
+
+let SEPARATED_PAIR_EXEC = prove
+ (`!g u v. SEPARATED_PAIR g u v <=>
+           ALL (\f. IS_LEN_GE5 (VERTICES f) \/ ~MEM f (FACES_AT g v))
+               (FACES_AT g u)`,
+  REWRITE_TAC[SEPARATED_PAIR; IS_LEN_GE5_LENGTH] THEN
+  REWRITE_TAC[ARITH_RULE `4 < n <=> 5 <= n`]);;
+end;;

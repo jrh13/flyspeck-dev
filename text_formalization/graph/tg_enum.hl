@@ -1,0 +1,215 @@
+(* ========================================================================= *)
+(* tame/tame_enum.ml                                                         *)
+(*                                                                           *)
+(* The plane-graph enumeration of Isabelle Enumerator.thy, FaceDivision.thy, *)
+(* Plane.thy and Plane1.thy: index-list enumeration (ENUMERATOR), face       *)
+(* division (SPLIT_FACE, SUBDIV_FACE), the duplicate-edge test, polygon      *)
+(* generation (GENERATE_POLYGON), the fixed-choice successor function        *)
+(* NEXT_PLANE (smallest nonfinal face, vertex of minimal height), the seed   *)
+(* SEED p = SEED_GRAPH (p + 3) and the plane graphs PLANE_GRAPHS reachable   *)
+(* from a seed (reflexive transitive closure RTC of Library/rstc.ml).        *)
+(* ========================================================================= *)
+
+needs "Library/rstc.ml";;
+flyspeck_needs "graph/tg_graph.hl";;
+
+module Tg_enum = struct
+
+open Tg_list;;
+open Tg_graph;;
+
+(* ------------------------------------------------------------------------- *)
+(* Enumerating the index lists of a new inner face (Enumerator.thy).         *)
+(* ------------------------------------------------------------------------- *)
+
+let ENUM_BASE = new_definition
+ `ENUM_BASE nmax = MAP (\i. [i]) (UPT 0 (SUC nmax))`;;
+
+let ENUM_APPEND = new_definition
+ `ENUM_APPEND nmax iss =
+    FLAT (MAP (\is. MAP (\n. APPEND is [n]) (UPT (LAST is) (SUC nmax))) iss)`;;
+
+let ENUMERATOR = new_definition
+ `ENUMERATOR inner outer =
+    let nmax = outer - 2 in
+    let k = inner - 3 in
+    MAP (\is. APPEND [0] (APPEND is [outer - 1]))
+        (ITER k (ENUM_APPEND nmax) (ENUM_BASE nmax))`;;
+
+let INDEX_TO_VERTEX_LIST = new_definition
+ `INDEX_TO_VERTEX_LIST f v is = HIDE_DUPS (MAP (\k. NEXT_VERTICES f k v) is)`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Subdividing a face (FaceDivision.thy).                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let SPLIT_FACE_PAIR = new_definition
+ `SPLIT_FACE_PAIR f ram1 ram2 newVs =
+    let vs = VERTICES f in
+    let f1 = APPEND [ram1] (APPEND (BETWEEN vs ram1 ram2) [ram2]) in
+    let f2 = APPEND [ram2] (APPEND (BETWEEN vs ram2 ram1) [ram1]) in
+    FACE (APPEND (REVERSE newVs) f1) Nonfinal,
+    FACE (APPEND f2 newVs) Nonfinal`;;
+
+let REPLACE_FACES_AT = new_definition
+ `REPLACE_FACES_AT ns f fs fss = MAP_AT ns (REPLACE f fs) fss`;;
+
+let MAKE_FACE_FINAL_LIST = new_definition
+ `MAKE_FACE_FINAL_LIST f fs = REPLACE f [SET_FINAL f] fs`;;
+
+let MAKE_FACE_FINAL = new_definition
+ `MAKE_FACE_FINAL f g =
+    GRAPH (MAKE_FACE_FINAL_LIST f (FACES g))
+          (COUNT_VERTICES g)
+          (MAP (MAKE_FACE_FINAL_LIST f) (FACE_LIST_AT g))
+          (HEIGHTS g)`;;
+
+let HEIGHTS_NEW_VERTICES = new_definition
+ `HEIGHTS_NEW_VERTICES h1 h2 n =
+    MAP (\i. MIN (h1 + i + 1) (h2 + n - i)) (UPT 0 n)`;;
+
+let SPLIT_FACE = new_definition
+ `SPLIT_FACE g ram1 ram2 oldF newVs =
+    let fs = FACES g in
+    let n = COUNT_VERTICES g in
+    let fss = FACE_LIST_AT g in
+    let h = HEIGHTS g in
+    let vs1 = BETWEEN (VERTICES oldF) ram1 ram2 in
+    let vs2 = BETWEEN (VERTICES oldF) ram2 ram1 in
+    let f1,f2 = SPLIT_FACE_PAIR oldF ram1 ram2 newVs in
+    let fss1 = REPLACE_FACES_AT vs1 oldF [f1] fss in
+    let fss2 = REPLACE_FACES_AT vs2 oldF [f2] fss1 in
+    let fss3 = REPLACE_FACES_AT [ram1] oldF [f2;f1] fss2 in
+    let fss4 = REPLACE_FACES_AT [ram2] oldF [f1;f2] fss3 in
+    let fss5 = APPEND fss4 (REPLICATE (LENGTH newVs) [f1;f2]) in
+    f1,f2,GRAPH (APPEND (REPLACE oldF [f2] fs) [f1])
+                (n + LENGTH newVs)
+                fss5
+                (APPEND h (HEIGHTS_NEW_VERTICES (EL ram1 h) (EL ram2 h)
+                                                (LENGTH newVs)))`;;
+
+(* The recursion of subdivFace' on the vertex option list is primitive;     *)
+(* the graph argument changes, so SUBDIV_FACE_REC takes the list first.      *)
+
+let SUBDIV_FACE_REC = define
+ `SUBDIV_FACE_REC [] g f u n = MAKE_FACE_FINAL f g /\
+  SUBDIV_FACE_REC (CONS vo vos) g f u n =
+    (match vo with
+       NONE -> SUBDIV_FACE_REC vos g f u (SUC n)
+     | SOME v ->
+         if NEXT_VERTEX f u = v /\ n = 0 then SUBDIV_FACE_REC vos g f v 0
+         else let ws = UPT (COUNT_VERTICES g) (COUNT_VERTICES g + n) in
+              let f1,f2,g' = SPLIT_FACE g u v f ws in
+              SUBDIV_FACE_REC vos g' f2 v 0)`;;
+
+let SUBDIV_FACE_REC_CLAUSES = prove
+ (`(!g f u n. SUBDIV_FACE_REC [] g f u n = MAKE_FACE_FINAL f g) /\
+   (!g f u n vos. SUBDIV_FACE_REC (CONS NONE vos) g f u n =
+                  SUBDIV_FACE_REC vos g f u (SUC n)) /\
+   (!g f u n v vos.
+      SUBDIV_FACE_REC (CONS (SOME v) vos) g f u n =
+        if NEXT_VERTEX f u = v /\ n = 0 then SUBDIV_FACE_REC vos g f v 0
+        else let ws = UPT (COUNT_VERTICES g) (COUNT_VERTICES g + n) in
+             let f1,f2,g' = SPLIT_FACE g u v f ws in
+             SUBDIV_FACE_REC vos g' f2 v 0)`,
+  REWRITE_TAC[SUBDIV_FACE_REC] THEN
+  CONV_TAC(TOP_DEPTH_CONV MATCH_CONV) THEN REWRITE_TAC[]);;
+
+let SUBDIV_FACE = new_definition
+ `SUBDIV_FACE g f vos = SUBDIV_FACE_REC (TL vos) g f (THE (HD vos)) 0`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Plane.thy: duplicate edges, polygon generation, the seed.                 *)
+(* ------------------------------------------------------------------------- *)
+
+let MAX_GON = new_definition
+ `MAX_GON p = p + 3`;;
+
+let DUPLICATE_EDGE = new_definition
+ `DUPLICATE_EDGE g f a b <=>
+    2 <= DIRECTED_LENGTH f a b /\ 2 <= DIRECTED_LENGTH f b a /\
+    MEM b (NEIGHBORS g a)`;;
+
+let CONTAINS_UNACCEPTABLE_EDGE_SND = define
+ `CONTAINS_UNACCEPTABLE_EDGE_SND (nb:num->num->bool) v [] = F /\
+  CONTAINS_UNACCEPTABLE_EDGE_SND nb v [w] = F /\
+  CONTAINS_UNACCEPTABLE_EDGE_SND nb v (CONS w (CONS w' ws)) =
+    (if v < w /\ w < w' /\ nb w w' then T
+     else CONTAINS_UNACCEPTABLE_EDGE_SND nb w (CONS w' ws))`;;
+
+let CONTAINS_UNACCEPTABLE_EDGE = define
+ `CONTAINS_UNACCEPTABLE_EDGE (nb:num->num->bool) [] = F /\
+  CONTAINS_UNACCEPTABLE_EDGE nb [v] = F /\
+  CONTAINS_UNACCEPTABLE_EDGE nb (CONS v (CONS w ws)) =
+    (if v < w /\ nb v w then T
+     else CONTAINS_UNACCEPTABLE_EDGE_SND nb v (CONS w ws))`;;
+
+let CONTAINS_DUPLICATE_EDGE = new_definition
+ `CONTAINS_DUPLICATE_EDGE g f v is <=>
+    CONTAINS_UNACCEPTABLE_EDGE
+      (\i j. DUPLICATE_EDGE g f (NEXT_VERTICES f i v) (NEXT_VERTICES f j v))
+      is`;;
+
+let GENERATE_POLYGON = new_definition
+ `GENERATE_POLYGON n v f g =
+    let enumeration = ENUMERATOR n (LENGTH(VERTICES f)) in
+    let enumeration' =
+      FILTER (\is. ~CONTAINS_DUPLICATE_EDGE g f v is) enumeration in
+    let vertexLists = MAP (INDEX_TO_VERTEX_LIST f v) enumeration' in
+    MAP (SUBDIV_FACE g f) vertexLists`;;
+
+let SEED = new_definition
+ `SEED p = SEED_GRAPH (MAX_GON p)`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Plane1.thy: one fixed face and vertex per refinement step.                *)
+(* ------------------------------------------------------------------------- *)
+
+let MINIMAL_FACE = new_definition
+ `MINIMAL_FACE fs = MINIMAL_EL (\f. LENGTH(VERTICES f)) fs`;;
+
+let MINIMAL_VERTEX = new_definition
+ `MINIMAL_VERTEX g f = MINIMAL_EL (HEIGHT g) (VERTICES f)`;;
+
+let NEXT_PLANE = new_definition
+ `NEXT_PLANE p g =
+    let fs = NON_FINALS g in
+    if fs = [] then [] else
+    let f = MINIMAL_FACE fs in
+    let v = MINIMAL_VERTEX g f in
+    FLAT (MAP (\i. GENERATE_POLYGON i v f g) (UPT 3 (SUC(MAX_GON p))))`;;
+
+(* g [succs]->star g' as RTC of the successor relation.                     *)
+
+let SUCCS_REL = new_definition
+ `SUCCS_REL succs g g' <=> MEM g' (succs g)`;;
+
+let PLANE_GRAPHS_P = new_definition
+ `PLANE_GRAPHS_P p =
+    {g | RTC (SUCCS_REL (NEXT_PLANE p)) (SEED p) g /\ FINAL_GRAPH g}`;;
+
+let PLANE_GRAPHS = new_definition
+ `PLANE_GRAPHS = UNIONS (IMAGE PLANE_GRAPHS_P (:num))`;;
+
+let IN_PLANE_GRAPHS_P = prove
+ (`!p g. g IN PLANE_GRAPHS_P p <=>
+         RTC (SUCCS_REL (NEXT_PLANE p)) (SEED p) g /\ FINAL_GRAPH g`,
+  REWRITE_TAC[PLANE_GRAPHS_P; IN_ELIM_THM]);;
+
+let IN_PLANE_GRAPHS = prove
+ (`!g. g IN PLANE_GRAPHS <=>
+       ?p. RTC (SUCCS_REL (NEXT_PLANE p)) (SEED p) g /\ FINAL_GRAPH g`,
+  REWRITE_TAC[PLANE_GRAPHS; IN_UNIONS; IN_IMAGE; IN_UNIV;
+              LEFT_AND_EXISTS_THM] THEN
+  ONCE_REWRITE_TAC[SWAP_EXISTS_THM] THEN
+  REWRITE_TAC[UNWIND_THM2; IN_PLANE_GRAPHS_P]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The final-face count.                                                     *)
+(* ------------------------------------------------------------------------- *)
+
+let NEXT_PLANE_FINAL = prove
+ (`!p g. FINAL_GRAPH g ==> NEXT_PLANE p g = []`,
+  REWRITE_TAC[FINAL_GRAPH; NEXT_PLANE] THEN
+  SIMP_TAC[LET_DEF; LET_END_DEF]);;
+end;;

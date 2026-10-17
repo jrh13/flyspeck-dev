@@ -1,0 +1,180 @@
+(* ========================================================================= *)
+(* tame/tame_sound.ml                                                        *)
+(*                                                                           *)
+(* The goal predicate of the search tree and the soundness lemmas the HOL    *)
+(* driver composes: TFO arch p g says every tame final graph reachable from  *)
+(* g by NEXT_PLANE p steps is isomorphic to a member of the archive list     *)
+(* arch.  The node lemma (TFO_NODE) is the induction step; the pruning       *)
+(* justify dropping successors (vertex count, degree, lower bound, untame    *)
+(* final graphs) and the whole polygon-size families; ISO_CERT_SOUND accepts *)
+(* a final graph (tame_isothm.ml).  The pruning lemmas themselves are proved *)
+(* in tame_mono.ml (vertex count, degree) and tame_lbthm.ml (lower bound).   *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_check.hl";;
+
+module Tg_sound = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+
+let REACH = new_definition
+ `REACH p g g' <=> RTC (SUCCS_REL (NEXT_PLANE p)) g g'`;;
+
+let TFO = new_definition
+ `TFO (arch:(((num)list)list)list) p g <=>
+    !g'. REACH p g g' /\ FINAL_GRAPH g' /\ TAME g'
+         ==> ?y. MEM y arch /\ ISO_FGRAPH (FGRAPH g') y`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Reachability.                                                             *)
+(* ------------------------------------------------------------------------- *)
+
+let REACH_REFL = prove
+ (`!p g. REACH p g g`,
+  REWRITE_TAC[REACH; RTC_REFL]);;
+
+let REACH_CASES = prove
+ (`!p g g'. REACH p g g' <=>
+            g = g' \/ ?g''. MEM g'' (NEXT_PLANE p g) /\ REACH p g'' g'`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[REACH] THEN
+  GEN_REWRITE_TAC LAND_CONV [RTC_CASES_R] THEN REWRITE_TAC[SUCCS_REL]);;
+
+let REACH_TRANS = prove
+ (`!p g g' g''. REACH p g g' /\ REACH p g' g'' ==> REACH p g g''`,
+  REWRITE_TAC[REACH] THEN MESON_TAC[RTC_TRANS]);;
+
+let REACH_INDUCT = prove
+ (`!p P. (!g g'. MEM g' (NEXT_PLANE p g) /\ P g ==> P g')
+         ==> !g g'. REACH p g g' /\ P g ==> P g'`,
+  REPEAT GEN_TAC THEN DISCH_TAC THEN REWRITE_TAC[REACH] THEN
+  MP_TAC(ISPECL [`SUCCS_REL (NEXT_PLANE p)`; `\g g':graph. P g ==> P g'`]
+    RTC_INDUCT_L) THEN
+  REWRITE_TAC[SUCCS_REL] THEN ASM_MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The node lemma and its final-graph instances.                             *)
+(* ------------------------------------------------------------------------- *)
+
+let TFO_NODE = prove
+ (`!arch p g.
+     (!g'. MEM g' (NEXT_PLANE p g) ==> TFO arch p g') /\
+     (FINAL_GRAPH g /\ TAME g ==> ?y. MEM y arch /\ ISO_FGRAPH (FGRAPH g) y)
+     ==> TFO arch p g`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN REWRITE_TAC[TFO] THEN
+  X_GEN_TAC `g':graph` THEN
+  GEN_REWRITE_TAC (LAND_CONV o LAND_CONV) [REACH_CASES] THEN
+  STRIP_TAC THENL
+   [ASM_MESON_TAC[]; ASM_MESON_TAC[TFO]]);;
+
+let TFO_FINAL = prove
+ (`!arch p g.
+     FINAL_GRAPH g /\
+     (TAME g ==> ?y. MEM y arch /\ ISO_FGRAPH (FGRAPH g) y)
+     ==> TFO arch p g`,
+  REPEAT STRIP_TAC THEN MATCH_MP_TAC TFO_NODE THEN
+  ASM_SIMP_TAC[NEXT_PLANE_FINAL; MEM]);;
+
+let TFO_FINAL_UNTAME = prove
+ (`!arch p g. FINAL_GRAPH g /\ ~TAME g ==> TFO arch p g`,
+  MESON_TAC[TFO_FINAL]);;
+
+let TFO_MEM_LIST = prove
+ (`!arch p l. ALL (TFO arch p) l ==> !g'. MEM g' l ==> TFO arch p g'`,
+  REWRITE_TAC[GSYM ALL_MEM]);;
+
+let TFO_FLAT = prove
+ (`!arch p ls. (!l. MEM l ls ==> !g'. MEM g' l ==> TFO arch p g')
+               ==> !g'. MEM g' (FLAT ls) ==> TFO arch p g'`,
+  REWRITE_TAC[MEM_FLAT] THEN MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Refuting tameness of a final graph by evaluation.                         *)
+(* ------------------------------------------------------------------------- *)
+
+let UNTAME_TAME10 = prove
+ (`!g. ~TAME10 g ==> ~TAME g`,
+  REWRITE_TAC[TAME] THEN MESON_TAC[]);;
+
+let UNTAME_TAME11A = prove
+ (`!g. ~TAME11A g ==> ~TAME g`,
+  REWRITE_TAC[TAME] THEN MESON_TAC[]);;
+
+let UNTAME_TAME11B = prove
+ (`!g. ~TAME11B g ==> ~TAME g`,
+  REWRITE_TAC[TAME] THEN MESON_TAC[]);;
+
+let UNTAME_TAME12O = prove
+ (`!g. ~TAME12O g ==> ~TAME g`,
+  REWRITE_TAC[TAME] THEN MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The structural invariant holds at the seeds.                              *)
+(* ------------------------------------------------------------------------- *)
+
+let FACE_LIST_LEN_SEED = prove
+ (`!p. FACE_LIST_LEN (SEED p)`,
+  REWRITE_TAC[FACE_LIST_LEN; SEED; SEED_GRAPH_CLAUSES; LENGTH_REPLICATE]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The node lemma in the form the driver uses: the successors by polygon     *)
+(* size, with the evaluated nonfinal faces, minimal face and vertex.         *)
+(* ------------------------------------------------------------------------- *)
+
+let TFO_MEM_LIST_EQ = prove
+ (`!arch p l l'. l' = l /\ ALL (TFO arch p) l
+                 ==> !g'. MEM g' l' ==> TFO arch p g'`,
+  REPEAT GEN_TAC THEN DISCH_THEN(CONJUNCTS_THEN2 SUBST1_TAC MP_TAC) THEN
+  REWRITE_TAC[GSYM ALL_MEM]);;
+
+let NEXT_PLANE_SIZES = prove
+ (`!p g fs f v.
+     NON_FINALS g = fs /\ ~NULL fs /\ MINIMAL_FACE fs = f /\
+     MINIMAL_VERTEX g f = v
+     ==> NEXT_PLANE p g =
+         FLAT (MAP (\i. GENERATE_POLYGON i v f g) (POLY_SIZES p))`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  ONCE_REWRITE_TAC[NEXT_PLANE_EXEC] THEN
+  ASM_REWRITE_TAC[LET_DEF; LET_END_DEF; POLY_SIZES]);;
+
+let TFO_NODE_SIZES = prove
+ (`!arch p g fs f v.
+     NON_FINALS g = fs /\ ~NULL fs /\ MINIMAL_FACE fs = f /\
+     MINIMAL_VERTEX g f = v /\
+     ALL (\i. !g'. MEM g' (GENERATE_POLYGON i v f g) ==> TFO arch p g')
+         (POLY_SIZES p)
+     ==> TFO arch p g`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN MATCH_MP_TAC TFO_NODE THEN CONJ_TAC THENL
+   [MP_TAC(SPECL [`p:num`; `g:graph`; `fs:face list`; `f:face`; `v:num`]
+      NEXT_PLANE_SIZES) THEN
+    ASM_REWRITE_TAC[] THEN DISCH_THEN SUBST1_TAC THEN
+    REWRITE_TAC[MEM_FLAT; MEM_MAP] THEN
+    FIRST_X_ASSUM(MP_TAC o GEN_REWRITE_RULE I [GSYM ALL_MEM]) THEN
+    MESON_TAC[];
+    REWRITE_TAC[FINAL_GRAPH] THEN ASM_MESON_TAC[NULL_EQ_NIL]]);;
+
+let ALL_CONS_INTRO = prove
+ (`!P (h:A) t. P h /\ ALL P t ==> ALL P (CONS h t)`,
+  REWRITE_TAC[ALL]);;
+
+let ALL_NIL_INTRO = prove
+ (`!P:A->bool. ALL P []`,
+  REWRITE_TAC[ALL]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Induction along reachability for a binary relation.                       *)
+(* ------------------------------------------------------------------------- *)
+
+let REACH_INDUCT_REL = prove
+ (`!p R. (!g. R g g) /\
+         (!g g' g''. R g g' /\ MEM g'' (NEXT_PLANE p g') ==> R g g'')
+         ==> !g g'. REACH p g g' ==> R g g'`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN REWRITE_TAC[REACH] THEN
+  MATCH_MP_TAC RTC_INDUCT_L THEN REWRITE_TAC[SUCCS_REL] THEN
+  ASM_MESON_TAC[]);;
+end;;

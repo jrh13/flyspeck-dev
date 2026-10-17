@@ -1,0 +1,294 @@
+(* ========================================================================= *)
+(* tame/tame_eval_db.ml                                                      *)
+(*                                                                           *)
+(* The rule database of the proof-producing evaluator: every function on the *)
+(* evaluation path with its executable clause theorem (tame_exec.ml,         *)
+(* tame_check.ml and the specification files), the numeral arithmetic rules  *)
+(* of tame_eval_support.ml and the equality rules.  tame_db builds the       *)
+(* database and the dependency groups for a result term; the generated OCaml *)
+(* evaluator is written by write_rules_consts.  Requires compute-hol-light's *)
+(* eval_compile.hl on the load path.                                         *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_eval_support.hl";;
+flyspeck_needs "graph/tg_xcheck.hl";;
+flyspeck_needs "graph/tg_newverts.hl";;
+flyspeck_needs "graph/tg_enum_fast.hl";;
+flyspeck_needs "graph/tg_xstats.hl";;
+flyspeck_needs "graph/tg_enum_fast2.hl";;
+flyspeck_needs "graph/tg_leaf.hl";;
+flyspeck_needs "graph/tg_leaf_exec.hl";;
+
+module Tg_eval_db = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+open Tg_arcs;;
+open Tg_split_inv;;
+open Tg_enum_props;;
+open Tg_subdiv_inv;;
+open Tg_xlbthm;;
+open Tg_xdriver_lemmas;;
+open Tg_enum_fast;;
+open Tg_enum_fast2;;
+open Tg_xstats;;
+open Tg_leaf;;
+open Tg_leaf_exec;;
+open Tg_eval_support;;
+
+(* the leaf check without the bare constant SQUANDER_TARGET *)
+let XLB_LEAF_EXEC = REWRITE_RULE[SQUANDER_TARGET] XLB_LEAF;;
+let XLB_LEAF_A_EXEC = REWRITE_RULE[SQUANDER_TARGET] XLB_LEAF_A;;
+
+(* the evaluator does not short-circuit ==> (it evaluated FACES_AT g w for *)
+(* a new vertex w and failed); the conditional form is evaluated lazily     *)
+let LEAF_SEP_OLD_EXEC = prove
+ (`!g f u w. LEAF_SEP_OLD g f u w <=>
+     (if w < COUNT_VERTICES g then
+        ALL (\h. h = f \/ 4 < LENGTH (VERTICES h) /\ FINAL_FACE h \/
+                 ~MEM u (VERTICES h)) (FACES_AT g w)
+      else T)`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[LEAF_SEP_OLD] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[]);;
+
+(* the evaluator's rule for XEXCESS_OF (tame_xstats.ml): no LET, no bare    *)
+(* constant SQUANDER_TARGET                                                  *)
+let XEXCESS_OF_EXEC =
+  REWRITE_RULE[SQUANDER_TARGET]
+    (PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] XEXCESS_OF);;
+
+needs "eval_compile.hl";;
+
+(* Constants evaluated away in the rules (eval_compile cannot treat 0-ary    *)
+(* non-constructor constants as values).                                     *)
+
+let SQUANDER_VERTEX_EXEC = REWRITE_RULE[SQUANDER_TARGET] SQUANDER_VERTEX;;
+let SQUANDER_FACE_EXEC = REWRITE_RULE[SQUANDER_TARGET] SQUANDER_FACE;;
+let EXCESS_AT_TYPE_EXEC =
+  REWRITE_RULE[SQUANDER_TARGET; EXCESS_T_COUNT; D3_CONST_VALUE; D4_CONST_VALUE;
+               MULT_CLAUSES; SUB_0] EXCESS_AT_TYPE;;
+let SIZE_PRUNED_EXEC = REWRITE_RULE[SQUANDER_TARGET] SIZE_PRUNED;;
+let LB_PRUNED_EXEC = REWRITE_RULE[SQUANDER_TARGET] LB_PRUNED;;
+let VCOUNT_PRUNED_VL_EXEC = VCOUNT_PRUNED_VL;;
+
+let tame_default_db ~eliminate_abs () =
+  let db = empty_db ~eliminate_abs "tame" in
+  List.iter (fun c -> set_rule db c) [
+    `(=):num->num->bool`;
+    `+`; `-`; `SUC`; `*`; `PRE`; `<=`; `<`; `MIN`; `MAX`;
+  ];
+  ignore (add_thms db [
+    "NOT_CLAUSES'", NOT_CLAUSES', [];
+    "EQ_BOOL", EQ_BOOL, [];
+    "EQ_PAIR", EQ_PAIR, [];
+    "EQ_LIST", EQ_LIST, [];
+    "EQ_FACE", EQ_FACE, [];
+    "EQ_FACETYPE", EQ_FACETYPE, [];
+  ]);
+  add_extra_rule db ("REPLACE_NUMERALS", REPLACE_NUMERALS);
+  List.iter (add_extra_rewrite db) ["GT", GT; "GE", GE];
+  db;;
+
+let tame_rules = [
+  "FST", FST, [];
+  "SND", SND, [];
+  "APPEND", APPEND, [];
+  "MAP", MAP, [];
+  "FILTER", FILTER, [];
+  "ALL", ALL, [];
+  "MEM", MEM, [];
+  "LENGTH", LENGTH, [];
+  "REVERSE", REVERSE, [];
+  "HD", HD, [];
+  "TL", TL, [];
+  "NULL_EXEC", NULL_EXEC, [];
+  "LAST_EXEC", LAST_EXEC, [];
+  "EL_EXEC", EL_EXEC, [];
+  "REPLICATE_EXEC", REPLICATE_EXEC, [];
+  "ITER_EXEC", ITER_EXEC, [];
+  "UPT_REC_EXEC", UPT_REC_EXEC, [];
+  "UPT", UPT, [];
+  "FLAT", FLAT, [];
+  "LIST_SUM", LIST_SUM, [];
+  "ROTATE1", ROTATE1, [];
+  "ROTATE_EXEC", ROTATE_EXEC, [];
+  "REPLACE", REPLACE, [];
+  "LIST_UPDATE", LIST_UPDATE, [];
+  "UPDATE_AT", UPDATE_AT, [];
+  "MAP_AT_EXEC", MAP_AT_EXEC, [];
+  "SPLIT_AT_LIN_EXEC", SPLIT_AT_LIN_EXEC, [];
+  "SPLIT_AT_EXEC", SPLIT_AT_EXEC, [];
+  "BETWEEN_EXEC", BETWEEN_EXEC, [];
+  "MINIMAL_EL_EXEC", MINIMAL_EL_EXEC, [];
+  "NEXT_ELEM", NEXT_ELEM, [];
+  "HIDE_DUPS_REC", HIDE_DUPS_REC, [];
+  "HIDE_DUPS", HIDE_DUPS, [];
+  "THE", THE, [];
+  "DISTINCT", DISTINCT, [];
+  "VERTICES", VERTICES, [];
+  "FACE_TYPE", FACE_TYPE, [];
+  "FINAL_FACE", FINAL_FACE, [];
+  "SET_FINAL", SET_FINAL, [];
+  "NEXT_VERTEX_EXEC", NEXT_VERTEX_EXEC, [];
+  "NEXT_VERTICES_EXEC", NEXT_VERTICES_EXEC, [];
+  "IS_LEN3", IS_LEN3, [];
+  "IS_LEN4", IS_LEN4, [];
+  "IS_LEN_GE5", IS_LEN_GE5, [];
+  "SQF", SQF, [];
+  "TRIANGLE_EXEC", TRIANGLE_EXEC, [];
+  "FACES", FACES, [];
+  "COUNT_VERTICES", COUNT_VERTICES, [];
+  "FACE_LIST_AT", FACE_LIST_AT, [];
+  "HEIGHTS", HEIGHTS, [];
+  "VERTICES_GRAPH", VERTICES_GRAPH, [];
+  "FACES_AT", FACES_AT, [];
+  "HEIGHT", HEIGHT, [];
+  "SEED_GRAPH_EXEC", SEED_GRAPH_EXEC, [];
+  "FINALS", FINALS, [];
+  "NON_FINALS", NON_FINALS, [];
+  "FINAL_GRAPH_EXEC", FINAL_GRAPH_EXEC, [];
+  "FINAL_VERTEX", FINAL_VERTEX, [];
+  "DEGREE", DEGREE, [];
+  "TRI_EXEC", TRI_EXEC, [];
+  "QUAD_EXEC", QUAD_EXEC, [];
+  "EXCEPT_EXEC", EXCEPT_EXEC, [];
+  "NEIGHBORS", NEIGHBORS, [];
+  "DIRECTED_LENGTH", DIRECTED_LENGTH, [];
+  "ENUM_BASE", ENUM_BASE, [];
+  "ENUM_APPEND", ENUM_APPEND, [];
+  "ENUMERATOR_EXEC", ENUMERATOR_EXEC, [];
+  "INDEX_TO_VERTEX_LIST", INDEX_TO_VERTEX_LIST, [];
+  "SPLIT_FACE_PAIR_EXEC", SPLIT_FACE_PAIR_EXEC, [];
+  "REPLACE_FACES_AT", REPLACE_FACES_AT, [];
+  "MAKE_FACE_FINAL_LIST", MAKE_FACE_FINAL_LIST, [];
+  "MAKE_FACE_FINAL", MAKE_FACE_FINAL, [];
+  "HEIGHTS_NEW_VERTICES", HEIGHTS_NEW_VERTICES, [];
+  "SPLIT_FACE_EXEC", SPLIT_FACE_EXEC, [];
+  "SUBDIV_FACE_REC_EXEC", SUBDIV_FACE_REC_EXEC, [];
+  "SUBDIV_FACE", SUBDIV_FACE, [];
+  "MAX_GON", MAX_GON, [];
+  "DUPLICATE_EDGE", DUPLICATE_EDGE, [];
+  "CONTAINS_UNACCEPTABLE_EDGE_SND", CONTAINS_UNACCEPTABLE_EDGE_SND, [];
+  "CONTAINS_UNACCEPTABLE_EDGE", CONTAINS_UNACCEPTABLE_EDGE, [];
+  "CONTAINS_DUPLICATE_EDGE", CONTAINS_DUPLICATE_EDGE, [];
+  "GENERATE_POLYGON_EXEC", GENERATE_POLYGON_EXEC, [];
+  "SEED", SEED, [];
+  "MINIMAL_FACE", MINIMAL_FACE, [];
+  "MINIMAL_VERTEX", MINIMAL_VERTEX, [];
+  "NEXT_PLANE_EXEC'", NEXT_PLANE_EXEC', [];
+  "SQUANDER_VERTEX_EXEC", SQUANDER_VERTEX_EXEC, [];
+  "SQUANDER_FACE_EXEC", SQUANDER_FACE_EXEC, [];
+  "EXCESS_AT_TYPE_EXEC", EXCESS_AT_TYPE_EXEC, [];
+  "EXCESS_AT", EXCESS_AT, [];
+  "FACE_SQUANDER_LOWER_BOUND_EXEC", FACE_SQUANDER_LOWER_BOUND_EXEC, [];
+  "TAME10_EXEC", TAME10_EXEC, [];
+  "TAME11A_ALL", TAME11A_ALL, [];
+  "TAME11B_ALL", TAME11B_ALL, [];
+  "TAME12O_ALL", TAME12O_ALL, [];
+  "TAME9A_ALL", TAME9A_ALL, [];
+  "DEGREE_PRUNED", DEGREE_PRUNED, [];
+  "LB_CERT_VERTEX_OK", LB_CERT_VERTEX_OK, [];
+  "SEPARATED_PAIR_EXEC", SEPARATED_PAIR_EXEC, [];
+  "SEPARATED_LIST", SEPARATED_LIST, [];
+  "LB_CERT_OK", LB_CERT_OK, [];
+  "LB_S", LB_S, [];
+  "SIZE_PRUNED_EXEC", SIZE_PRUNED_EXEC, [];
+  "LB_PRUNED_EXEC", LB_PRUNED_EXEC, [];
+  "FACE_LIST_LEN", FACE_LIST_LEN, [];
+  "NEW_VERTS", NEW_VERTS, [];
+  "POLY_VLISTS", POLY_VLISTS, [];
+  "ROTATE_TO", ROTATE_TO, [];
+  "IVL_FAST", IVL_FAST, [];
+  "POLY_VLISTS_FAST", POLY_VLISTS_FAST, [];
+  "DUP_EDGE_IDX", DUP_EDGE_IDX, [];
+  "CONTAINS_DUPLICATE_EDGE_IDX", CONTAINS_DUPLICATE_EDGE_IDX, [];
+  "PV_FAST2", PV_FAST2, [];
+  "POLY_VLISTS_FAST2", POLY_VLISTS_FAST2, [];
+  "VCOUNT_PRUNED_VL_EXEC", VCOUNT_PRUNED_VL_EXEC, [];
+  "MINFACE_WF", MINFACE_WF, [];
+  "FGRAPH", FGRAPH, [];
+  "POLY_SIZES", POLY_SIZES, [];
+  "APPLY_MAP", APPLY_MAP, [];
+  "FACE_MATCH", FACE_MATCH, [];
+  "FACE_MATCH_BACK", FACE_MATCH_BACK, [];
+  "ISO_CERT_OK_EXEC", ISO_CERT_OK_EXEC, [];
+  "ALL2", ALL2, [];
+  (* the stronger lower bound (tame_xlb.ml, tame_xcheck.ml) *)
+  "NF_AT", NF_AT, [];
+  "SF_SUM", SF_SUM, [];
+  "CV0_EXEC", CV0_EXEC, [];
+  "MIN_LIST", MIN_LIST, [];
+  "COMPLETION_VALUE_EXEC'", COMPLETION_VALUE_EXEC', [];
+  "XEXCESS_EXEC'", XEXCESS_EXEC', [];
+  "XSEPARATED_PAIR", XSEPARATED_PAIR, [];
+  "XSEPARATED_LIST", XSEPARATED_LIST, [];
+  "XLB_CERT_OK", XLB_CERT_OK, [];
+  "XLB_S", XLB_S, [];
+  "XLB_PRUNED_EXEC", XLB_PRUNED_EXEC, [];
+  "XSIZE_PRUNED_EXEC", XSIZE_PRUNED_EXEC, [];
+  "XSIZE_PRUNED_S_EXEC", XSIZE_PRUNED_S_EXEC, [];
+  "XEXCESS_OF_EXEC", XEXCESS_OF_EXEC, [];
+  "SOMES", SOMES, [];
+  "ARCS_REC", ARCS_REC, [];
+  "ARCS", ARCS, [];
+  "ARC_A", ARC_A, [];
+  "ARC_K", ARC_K, [];
+  "ARC_B", ARC_B, [];
+  "ARC_BASE", ARC_BASE, [];
+  "TRIVIAL_ARC", TRIVIAL_ARC, [];
+  "PIECE_ARCS", PIECE_ARCS, [];
+  "ARC_VERTS", ARC_VERTS, [];
+  "PIECES_AT", PIECES_AT, [];
+  "NEW_COUNT", NEW_COUNT, [];
+  "POLY_VERTS", POLY_VERTS, [];
+  "XCOUNTS_AFTER_I", XCOUNTS_AFTER_I, [];
+  "XCOUNTS_AFTER", XCOUNTS_AFTER, [];
+  "LEAF_SEP_OLD_EXEC", LEAF_SEP_OLD_EXEC, [];
+  "LEAF_SEP_PIECES", LEAF_SEP_PIECES, [];
+  "LEAF_SEP_POLY", LEAF_SEP_POLY, [];
+  "LEAF_SEP_PAIR", LEAF_SEP_PAIR, [];
+  "LEAF_SEP", LEAF_SEP, [];
+  "XLB_LEAF_EXEC", XLB_LEAF_EXEC, [];
+  "PIECES_AT_A", PIECES_AT_A, [];
+  "XCOUNTS_AFTER_A", XCOUNTS_AFTER_A, [];
+  "LEAF_SEP_PIECES_A", LEAF_SEP_PIECES_A, [];
+  "LEAF_SEP_PAIR_A", LEAF_SEP_PAIR_A, [];
+  "LEAF_SEP_A", LEAF_SEP_A, [];
+  "XLB_LEAF_A_EXEC", XLB_LEAF_A_EXEC, [];
+  "XLB_LEAF_S", XLB_LEAF_S, [];
+];;
+
+let tame_db ?(eliminate_abs = true) ?(counters = true) ?(inst_types = true)
+            ?(result = `NEXT_PLANE p g`) rules =
+  let db = add_thms (tame_default_db ~eliminate_abs ()) rules in
+  let consts = dependencies db result ~inst_types in
+  if counters then set_extra_for_all db (Extra_counter 0);
+  set_extra_for_consts db (Extra_memo (Assoc_memo 64)) [`ENUMERATOR`];
+  set_extra_for_consts db (Extra_memo (Assoc_memo 1024)) [`CV0`];
+  db, consts;;
+end;;

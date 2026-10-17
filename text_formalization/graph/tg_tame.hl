@@ -1,0 +1,167 @@
+(* ========================================================================= *)
+(* tame/tame_tame.ml                                                         *)
+(*                                                                           *)
+(* Tameness of plane graphs (Isabelle Tame.thy): the squander constants      *)
+(* SQUANDER_TARGET, EXCESS_T_COUNT (a), SQUANDER_VERTEX (b), SQUANDER_FACE   *)
+(* (d), admissible weight assignments, the tameness conditions tame9a, 10,   *)
+(* 11a, 11b, 12o, 13a and TAME; also the per-vertex excess and the face      *)
+(* squander sum of Generator.thy which the lower bound is built from.        *)
+(* Quantification over the vertices and faces of a graph is by MEM in the    *)
+(* lists VERTICES_GRAPH g and FACES g (Isabelle's set).                      *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_enum.hl";;
+
+module Tg_tame = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+
+(* ------------------------------------------------------------------------- *)
+(* Constants.                                                                *)
+(* ------------------------------------------------------------------------- *)
+
+let SQUANDER_TARGET = new_definition
+ `SQUANDER_TARGET = 15410`;;
+
+let EXCESS_T_COUNT = new_definition
+ `EXCESS_T_COUNT = 6295`;;
+
+let SQUANDER_VERTEX = new_definition
+ `SQUANDER_VERTEX p q =
+    if p = 0 /\ q = 3 then 6177
+    else if p = 0 /\ q = 4 then 9696
+    else if p = 1 /\ q = 2 then 6557
+    else if p = 1 /\ q = 3 then 6176
+    else if p = 2 /\ q = 1 then 7967
+    else if p = 2 /\ q = 2 then 4116
+    else if p = 2 /\ q = 3 then 12846
+    else if p = 3 /\ q = 1 then 3106
+    else if p = 3 /\ q = 2 then 8165
+    else if p = 4 /\ q = 0 then 3466
+    else if p = 4 /\ q = 1 then 3655
+    else if p = 5 /\ q = 0 then 395
+    else if p = 5 /\ q = 1 then 11354
+    else if p = 6 /\ q = 0 then 6854
+    else if p = 7 /\ q = 0 then 14493
+    else SQUANDER_TARGET`;;
+
+let SQUANDER_FACE = new_definition
+ `SQUANDER_FACE n =
+    if n = 3 then 0
+    else if n = 4 then 2058
+    else if n = 5 then 4819
+    else if n = 6 then 7120
+    else SQUANDER_TARGET`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Admissible weight assignments.                                            *)
+(* ------------------------------------------------------------------------- *)
+
+let ADMISSIBLE1 = new_definition
+ `ADMISSIBLE1 w g <=>
+    !f. MEM f (FACES g) ==> SQUANDER_FACE (LENGTH(VERTICES f)) <= w f`;;
+
+let ADMISSIBLE2 = new_definition
+ `ADMISSIBLE2 w g <=>
+    !v. MEM v (VERTICES_GRAPH g) /\ EXCEPT g v = 0
+        ==> SQUANDER_VERTEX (TRI g v) (QUAD g v) <=
+            LIST_SUM w (FACES_AT g v)`;;
+
+let ADMISSIBLE3 = new_definition
+ `ADMISSIBLE3 w g <=>
+    !v. MEM v (VERTICES_GRAPH g) /\ VERTEX_TYPE g v = (5,0,1)
+        ==> EXCESS_T_COUNT <= LIST_SUM w (FILTER TRIANGLE (FACES_AT g v))`;;
+
+let ADMISSIBLE = new_definition
+ `ADMISSIBLE w g <=> ADMISSIBLE1 w g /\ ADMISSIBLE2 w g /\ ADMISSIBLE3 w g`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Tameness.                                                                 *)
+(* ------------------------------------------------------------------------- *)
+
+let TAME9A = new_definition
+ `TAME9A g <=>
+    !f. MEM f (FACES g)
+        ==> 3 <= LENGTH(VERTICES f) /\ LENGTH(VERTICES f) <= 6`;;
+
+let TAME10 = new_definition
+ `TAME10 g <=> let n = COUNT_VERTICES g in 13 <= n /\ n <= 15`;;
+
+let TAME10UB = new_definition
+ `TAME10UB g <=> COUNT_VERTICES g <= 15`;;
+
+let TAME11A = new_definition
+ `TAME11A g <=> !v. MEM v (VERTICES_GRAPH g) ==> 3 <= DEGREE g v`;;
+
+let TAME11B = new_definition
+ `TAME11B g <=>
+    !v. MEM v (VERTICES_GRAPH g)
+        ==> DEGREE g v <= (if EXCEPT g v = 0 then 7 else 6)`;;
+
+let TAME12O = new_definition
+ `TAME12O g <=>
+    !v. MEM v (VERTICES_GRAPH g) /\ ~(EXCEPT g v = 0) /\ DEGREE g v = 6
+        ==> VERTEX_TYPE g v = (5,0,1)`;;
+
+let TAME13A = new_definition
+ `TAME13A g <=>
+    ?w. ADMISSIBLE w g /\ LIST_SUM w (FACES g) < SQUANDER_TARGET`;;
+
+let TAME = new_definition
+ `TAME g <=> TAME9A g /\ TAME10 g /\ TAME11A g /\ TAME11B g /\
+             TAME12O g /\ TAME13A g`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Ingredients of the lower bound (Generator.thy).                           *)
+(* ------------------------------------------------------------------------- *)
+
+let FACE_SQUANDER_LOWER_BOUND = new_definition
+ `FACE_SQUANDER_LOWER_BOUND g =
+    LIST_SUM (\f. SQUANDER_FACE (LENGTH(VERTICES f))) (FINALS g)`;;
+
+let D3_CONST = new_definition
+ `D3_CONST = SQUANDER_FACE 3`;;
+
+let D4_CONST = new_definition
+ `D4_CONST = SQUANDER_FACE 4`;;
+
+let EXCESS_AT_TYPE = new_definition
+ `EXCESS_AT_TYPE t q e =
+    if e = 0 then
+      if 7 < t + q then SQUANDER_TARGET
+      else SQUANDER_VERTEX t q - t * D3_CONST - q * D4_CONST
+    else if ~(t + q + e = 6) then 0
+    else if t = 5 then EXCESS_T_COUNT else SQUANDER_TARGET`;;
+
+let EXCESS_AT = new_definition
+ `EXCESS_AT g v =
+    if ~FINAL_VERTEX g v then 0
+    else EXCESS_AT_TYPE (TRI g v) (QUAD g v) (EXCEPT g v)`;;
+
+(* ------------------------------------------------------------------------- *)
+(* The constants evaluated.                                                  *)
+(* ------------------------------------------------------------------------- *)
+
+let SQUANDER_FACE_CLAUSES = prove
+ (`SQUANDER_FACE 3 = 0 /\ SQUANDER_FACE 4 = 2058 /\
+   SQUANDER_FACE 5 = 4819 /\ SQUANDER_FACE 6 = 7120 /\
+   (!n. 7 <= n \/ n < 3 ==> SQUANDER_FACE n = 15410)`,
+  REWRITE_TAC[SQUANDER_FACE; SQUANDER_TARGET; ARITH_EQ] THEN
+  REPEAT STRIP_TAC THEN REPEAT COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[] THEN ASM_ARITH_TAC);;
+
+let D3_CONST_VALUE = prove
+ (`D3_CONST = 0`,
+  REWRITE_TAC[D3_CONST; SQUANDER_FACE_CLAUSES]);;
+
+let D4_CONST_VALUE = prove
+ (`D4_CONST = 2058`,
+  REWRITE_TAC[D4_CONST; SQUANDER_FACE_CLAUSES]);;
+
+let SQUANDER_FACE_MONO = prove
+ (`!m n. 3 <= m /\ m <= n ==> SQUANDER_FACE m <= SQUANDER_FACE n`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[SQUANDER_FACE; SQUANDER_TARGET] THEN
+  REPEAT(COND_CASES_TAC THEN ASM_REWRITE_TAC[]) THEN ASM_ARITH_TAC);;
+end;;

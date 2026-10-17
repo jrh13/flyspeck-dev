@@ -1,0 +1,149 @@
+(* ========================================================================= *)
+(* tame/tame_enum_fast.ml -- faster executable form of POLY_VLISTS.          *)
+(*                                                                           *)
+(* The vertex of index k around the face from v is EL k of the rotation of   *)
+(* the vertex list starting at v (INDEX_TO_VERTEX_LIST walks NEXT_VERTEX k   *)
+(* times, quadratic in the face).  Proved version (agent efast): the four    *)
+(* definitions and the two statements of the skeleton are kept verbatim.     *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_enum_props.hl";;
+flyspeck_needs "graph/tg_newverts.hl";;
+
+module Tg_enum_fast = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+open Tg_arcs;;
+open Tg_split_inv;;
+open Tg_enum_props;;
+open Tg_subdiv_inv;;
+open Tg_xlbthm;;
+open Tg_xdriver_lemmas;;
+
+let ROTATE_TO = new_definition
+ `ROTATE_TO (v:A) l =
+    APPEND (CONS v (SND (SPLIT_AT_LIN v l))) (FST (SPLIT_AT_LIN v l))`;;
+
+let IVL_FAST = new_definition
+ `IVL_FAST (rot:num list) is = HIDE_DUPS (MAP (\k. EL k rot) is)`;;
+
+let INDEX_TO_VERTEX_LIST_FAST = new_definition
+ `INDEX_TO_VERTEX_LIST_FAST f v is =
+    IVL_FAST (ROTATE_TO v (VERTICES f)) is`;;
+
+let POLY_VLISTS_FAST = new_definition
+ `POLY_VLISTS_FAST n v f g =
+    MAP (IVL_FAST (ROTATE_TO v (VERTICES f)))
+        (FILTER (\is. ~CONTAINS_DUPLICATE_EDGE g f v is)
+                (ENUMERATOR n (LENGTH(VERTICES f))))`;;
+
+(* SPLIT_AT_LIN c l splits l at the first occurrence of c.                   *)
+
+let SPLIT_AT_LIN_MEM_APPEND = prove
+ (`!l (c:A). MEM c l
+             ==> APPEND (FST (SPLIT_AT_LIN c l))
+                        (CONS c (SND (SPLIT_AT_LIN c l))) = l`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[MEM; SPLIT_AT_LIN] THEN
+  X_GEN_TAC `c:A` THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[LET_DEF; LET_END_DEF; FST; SND; APPEND] THEN
+  ASM_MESON_TAC[]);;
+
+(* ROTATE_TO v l is the rotation of l by the length of the prefix before v.  *)
+
+let ROTATE_TO_ROTATE = prove
+ (`!l (v:A). MEM v l
+             ==> ROTATE (LENGTH (FST (SPLIT_AT_LIN v l))) l = ROTATE_TO v l`,
+  REPEAT STRIP_TAC THEN REWRITE_TAC[ROTATE_TO] THEN
+  MP_TAC(ISPECL [`FST (SPLIT_AT_LIN (v:A) l)`;
+                 `CONS (v:A) (SND (SPLIT_AT_LIN v l))`]
+    ROTATE_APPEND_LENGTH) THEN
+  ASM_SIMP_TAC[SPLIT_AT_LIN_MEM_APPEND]);;
+
+(* The vertex of index k from v is EL k of that rotation (NEXT_VERTICES_EL). *)
+
+let NEXT_VERTICES_ROTATE_TO = prove
+ (`!f v k. DISTINCT (VERTICES f) /\ MEM v (VERTICES f) /\
+           k < LENGTH (VERTICES f)
+           ==> NEXT_VERTICES f k v = EL k (ROTATE_TO v (VERTICES f))`,
+  REPEAT STRIP_TAC THEN
+  MP_TAC(ISPECL [`VERTICES f`; `v:num`] ROTATE_TO_ROTATE) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_TAC THEN
+  MP_TAC(ISPECL [`f:face`; `LENGTH (FST (SPLIT_AT_LIN v (VERTICES f)))`;
+                 `v:num`;
+                 `APPEND (SND (SPLIT_AT_LIN v (VERTICES f)))
+                         (FST (SPLIT_AT_LIN v (VERTICES f)))`;
+                 `k:num`] NEXT_VERTICES_EL) THEN
+  ASM_REWRITE_TAC[ROTATE_TO; APPEND]);;
+
+let INDEX_TO_VERTEX_LIST_FAST_EQ = prove
+ (`!f v is. DISTINCT (VERTICES f) /\ MEM v (VERTICES f) /\
+            ALL (\k. k < LENGTH (VERTICES f)) is
+            ==> INDEX_TO_VERTEX_LIST f v is =
+                INDEX_TO_VERTEX_LIST_FAST f v is`,
+  REPEAT STRIP_TAC THEN
+  REWRITE_TAC[INDEX_TO_VERTEX_LIST; INDEX_TO_VERTEX_LIST_FAST; IVL_FAST] THEN
+  AP_TERM_TAC THEN MATCH_MP_TAC MAP_EQ THEN
+  UNDISCH_TAC `ALL (\k. k < LENGTH (VERTICES f)) is` THEN
+  REWRITE_TAC[GSYM ALL_MEM] THEN
+  REPEAT STRIP_TAC THEN MATCH_MP_TAC NEXT_VERTICES_ROTATE_TO THEN
+  ASM_SIMP_TAC[]);;
+
+(* The faces of a graph with GRAPH_INV have distinct vertices and at least   *)
+(* three of them (FACES_SIMPLE); every index of a member of ENUMERATOR n     *)
+(* (LENGTH (VERTICES f)) is below the length (ENUMERATOR_MEM).               *)
+
+let POLY_VLISTS_FAST_EQ = prove
+ (`!g f v n. GRAPH_INV g /\ MEM f (FACES g) /\ MEM v (VERTICES f) /\ 3 <= n
+             ==> POLY_VLISTS n v f g = POLY_VLISTS_FAST n v f g`,
+  REPEAT STRIP_TAC THEN
+  SUBGOAL_THEN `DISTINCT (VERTICES f) /\ 3 <= LENGTH (VERTICES f)`
+  STRIP_ASSUME_TAC THENL
+   [UNDISCH_TAC `GRAPH_INV g` THEN
+    REWRITE_TAC[GRAPH_INV; FACES_SIMPLE; GSYM ALL_MEM] THEN
+    DISCH_THEN(MP_TAC o SPEC `f:face` o CONJUNCT1 o CONJUNCT2 o
+               CONJUNCT2) THEN
+    ASM_REWRITE_TAC[];
+    ALL_TAC] THEN
+  REWRITE_TAC[POLY_VLISTS; POLY_VLISTS_FAST] THEN
+  MATCH_MP_TAC MAP_EQ THEN REWRITE_TAC[GSYM ALL_MEM; MEM_FILTER] THEN
+  X_GEN_TAC `is:num list` THEN STRIP_TAC THEN
+  REWRITE_TAC[GSYM INDEX_TO_VERTEX_LIST_FAST] THEN
+  MATCH_MP_TAC INDEX_TO_VERTEX_LIST_FAST_EQ THEN ASM_REWRITE_TAC[] THEN
+  MP_TAC(ISPECL [`n:num`; `LENGTH (VERTICES f)`; `is:num list`]
+    ENUMERATOR_MEM) THEN
+  ASM_REWRITE_TAC[] THEN
+  DISCH_THEN(X_CHOOSE_THEN `js:num list` STRIP_ASSUME_TAC) THEN
+  ASM_REWRITE_TAC[ALL; ALL_APPEND] THEN
+  REPEAT CONJ_TAC THEN TRY ASM_ARITH_TAC THEN
+  UNDISCH_TAC `ALL (\x. x <= LENGTH (VERTICES f) - 2) js` THEN
+  REWRITE_TAC[GSYM ALL_MEM] THEN
+  DISCH_TAC THEN X_GEN_TAC `x:num` THEN DISCH_TAC THEN
+  FIRST_X_ASSUM(MP_TAC o SPEC `x:num`) THEN ASM_REWRITE_TAC[] THEN
+  ASM_ARITH_TAC);;
+end;;

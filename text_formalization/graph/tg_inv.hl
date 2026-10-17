@@ -1,0 +1,80 @@
+(* ========================================================================= *)
+(* tame/tame_inv.ml -- the structural invariant GRAPH_INV of the enumeration *)
+(* (a subset of Isabelle's inv): faces have distinct vertices and at least   *)
+(* three of them, the face list is duplicate-free, the face list at a vertex *)
+(* is exactly the set of faces containing it (without duplicates), every     *)
+(* directed edge belongs to exactly one face and has its reverse in some     *)
+(* face.  Needed by the stronger lower bound (tame_xlb.ml), whose argument   *)
+(* reasons about the face lists of non-final vertices in future graphs.      *)
+(* Preservation: tame_split_inv.ml (one split), tame_subdiv_inv.ml (the     *)
+(* enumeration), proved by agents.                                           *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_wf.hl";;
+
+module Tg_inv = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+
+(* The directed edges of a face: every vertex with its successor.            *)
+
+let EDGES = new_definition
+ `EDGES f = MAP (\x. (x, NEXT_VERTEX f x)) (VERTICES f)`;;
+
+let FACES_SIMPLE = new_definition
+ `FACES_SIMPLE g <=>
+    ALL (\f. DISTINCT (VERTICES f) /\ 3 <= LENGTH (VERTICES f)) (FACES g)`;;
+
+let FACES_AT_OK = new_definition
+ `FACES_AT_OK g <=>
+    !v. v < COUNT_VERTICES g
+        ==> DISTINCT (FACES_AT g v) /\
+            (!f. MEM f (FACES_AT g v) <=>
+                 MEM f (FACES g) /\ MEM v (VERTICES f))`;;
+
+let EDGES_UNIQUE = new_definition
+ `EDGES_UNIQUE g <=>
+    !f f' e. MEM f (FACES g) /\ MEM f' (FACES g) /\
+             MEM e (EDGES f) /\ MEM e (EDGES f')
+             ==> f = f'`;;
+
+let EDGES_SYM = new_definition
+ `EDGES_SYM g <=>
+    !f a b. MEM f (FACES g) /\ MEM (a,b) (EDGES f)
+            ==> ?f'. MEM f' (FACES g) /\ MEM (b,a) (EDGES f')`;;
+
+let GRAPH_INV = new_definition
+ `GRAPH_INV g <=>
+    WF_GRAPH g /\ DISTINCT (FACES g) /\ FACES_SIMPLE g /\ FACES_AT_OK g /\
+    EDGES_UNIQUE g /\ EDGES_SYM g`;;
+
+(* The chosen (old) vertices of a vertex option list, in order.              *)
+
+let SOMES = define
+ `SOMES [] = [] /\
+  SOMES (CONS NONE vos) = SOMES vos /\
+  SOMES (CONS (SOME (x:num)) vos) = CONS x (SOMES vos)`;;
+end;;

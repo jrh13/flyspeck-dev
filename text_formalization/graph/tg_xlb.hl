@@ -1,0 +1,120 @@
+(* ========================================================================= *)
+(* tame/tame_xlb.ml -- the stronger lower bound ("completion excess").       *)
+(*                                                                           *)
+(* Nipkow's bound charges the squander of the final faces and the excess of  *)
+(* final vertices.  Here EVERY vertex v may be charged: in any tame final    *)
+(* descendant, the faces at v carry at least COMPLETION_VALUE, the minimum   *)
+(* over the tame final types (t',q',e') still reachable from v's current     *)
+(* final faces (t' >= t, q' >= q, e' >= e, final degree >= current degree,  *)
+(* equal if v is final, <= 7 and <= 6 if exceptional, degree 6 with an      *)
+(* exceptional face forcing type (5,0,1)) of the weight the faces at v must  *)
+(* carry; XEXCESS subtracts the squander already counted for v's final      *)
+(* faces.  Separation: no small (<= 4) or non-final face at v contains      *)
+(* another chosen vertex.  Soundness: tame_xlbthm.ml; the native generator   *)
+(* (measure/lbvar_defs.ml variant 2) uses the same numbers.                  *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_check.hl";;
+
+module Tg_xlb = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+
+let NF_AT = new_definition
+ `NF_AT g v = LENGTH (FILTER (\f. ~FINAL_FACE f) (FACES_AT g v))`;;
+
+let SF_SUM = new_definition
+ `SF_SUM g v = LIST_SUM (\f. SQUANDER_FACE (LENGTH (VERTICES f)))
+                        (FILTER FINAL_FACE (FACES_AT g v))`;;
+
+let TYPE_PAIRS = new_definition
+ `TYPE_PAIRS = FLAT (MAP (\tt. MAP (\qq. (tt,qq)) (UPT 0 8)) (UPT 0 8))`;;
+
+let CV_LIST = new_definition
+ `CV_LIST t q e nf s =
+    APPEND
+     (if e = 0 then
+        MAP (\p. SQUANDER_VERTEX (FST p) (SND p))
+            (FILTER (\p. t <= FST p /\ q <= SND p /\ FST p + SND p <= 7 /\
+                         (if nf = 0 then FST p + SND p = t + q
+                          else t + q + nf <= FST p + SND p))
+                    TYPE_PAIRS)
+      else [])
+     (APPEND
+       (if t + q + e + nf <= 5 /\ (1 <= e \/ 0 < nf)
+        then [s + (if e = 0 then SQUANDER_FACE 5 else 0)]
+        else [])
+       (if t + q + e + nf <= 6 /\
+           (0 < nf \/ 1 <= e /\ t + q + e + nf = 6) /\
+           t <= 5 /\ q = 0 /\ e <= 1
+        then [EXCESS_T_COUNT + (if e = 1 then s else SQUANDER_FACE 5)]
+        else []))`;;
+
+let MIN_LIST = define
+ `MIN_LIST d [] = d /\
+  MIN_LIST d (CONS (h:num) t) = MIN h (MIN_LIST d t)`;;
+
+let COMPLETION_VALUE = new_definition
+ `COMPLETION_VALUE t q e nf s =
+    MIN_LIST SQUANDER_TARGET (CV_LIST t q e nf s)`;;
+
+let XEXCESS = new_definition
+ `XEXCESS g v =
+    let c = COMPLETION_VALUE (TRI g v) (QUAD g v) (EXCEPT g v) (NF_AT g v)
+                             (SF_SUM g v) in
+    if SQUANDER_TARGET <= c then SQUANDER_TARGET else c - SF_SUM g v`;;
+
+(* u is not a vertex of any small or non-final face at v.                   *)
+
+let XSEPARATED_PAIR = new_definition
+ `XSEPARATED_PAIR g u v <=>
+    ALL (\f. 4 < LENGTH (VERTICES f) /\ FINAL_FACE f \/ ~MEM u (VERTICES f))
+        (FACES_AT g v)`;;
+
+let XSEPARATED_LIST = define
+ `XSEPARATED_LIST g [] = T /\
+  XSEPARATED_LIST g (CONS v vs) =
+    (ALL (\u. XSEPARATED_PAIR g u v /\ XSEPARATED_PAIR g v u) vs /\
+     XSEPARATED_LIST g vs)`;;
+
+let XLB_CERT_OK = new_definition
+ `XLB_CERT_OK g cs <=>
+    DISTINCT cs /\ ALL (\v. v < COUNT_VERTICES g) cs /\ XSEPARATED_LIST g cs`;;
+
+let XLB_S = new_definition
+ `XLB_S g cs = FACE_SQUANDER_LOWER_BOUND g + LIST_SUM (XEXCESS g) cs`;;
+
+let XLB_PRUNED = new_definition
+ `XLB_PRUNED g cs <=> SQUANDER_TARGET <= XLB_S g cs`;;
+
+(* Size pruning: the chosen vertices avoid the face f about to be split.    *)
+
+let XSIZE_PRUNED = new_definition
+ `XSIZE_PRUNED g cs f i <=>
+    ALL (\v. ~MEM v (VERTICES f)) cs /\
+    SQUANDER_TARGET <= XLB_S g cs + SQUANDER_FACE i`;;
+end;;

@@ -1,0 +1,245 @@
+(* ========================================================================= *)
+(* tame/tame_graph.ml                                                        *)
+(*                                                                           *)
+(* Faces and plane graphs as in Isabelle Graph.thy (Bauer/Nipkow): the      *)
+(* types facetype, face, graph, their projections, the seed graph, finality, *)
+(* face counts at a vertex (DEGREE, TRI, QUAD, EXCEPT), neighbours and       *)
+(* directed lengths.  Isabelle's overloaded `vertices` is VERTICES on faces  *)
+(* and VERTICES_GRAPH on graphs; `final` is FINAL_FACE / FINAL_GRAPH.        *)
+(* Vertices are numbers; a graph is GRAPH faces count faceListAt heights.    *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_list.hl";;
+
+module Tg_graph = struct
+
+open Tg_list;;
+
+(* ------------------------------------------------------------------------- *)
+(* Types.                                                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let facetype_INDUCT,facetype_RECURSION = define_type
+  "facetype = Final | Nonfinal";;
+
+let face_INDUCT,face_RECURSION = define_type
+  "face = FACE (num list) facetype";;
+
+let graph_INDUCT,graph_RECURSION = define_type
+  "graph = GRAPH (face list) num ((face list) list) (num list)";;
+
+let FACETYPE_CASES = prove
+ (`!t. t = Final \/ t = Nonfinal`,
+  MATCH_ACCEPT_TAC (cases "facetype"));;
+
+let FACETYPE_DISTINCT = distinctness "facetype";;
+
+let FACE_INJ = injectivity "face";;
+
+let GRAPH_INJ = injectivity "graph";;
+
+let FORALL_FACE_THM = prove
+ (`!P. (!f:face. P f) <=> (!vs t. P (FACE vs t))`,
+  GEN_TAC THEN EQ_TAC THEN SIMP_TAC[] THEN
+  REPEAT STRIP_TAC THEN
+  STRUCT_CASES_TAC(SPEC `f:face` (cases "face")) THEN ASM_REWRITE_TAC[]);;
+
+let FORALL_GRAPH_THM = prove
+ (`!P. (!g:graph. P g) <=> (!fs n fl h. P (GRAPH fs n fl h))`,
+  GEN_TAC THEN EQ_TAC THEN SIMP_TAC[] THEN
+  REPEAT STRIP_TAC THEN
+  STRUCT_CASES_TAC(SPEC `g:graph` (cases "graph")) THEN ASM_REWRITE_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Faces.                                                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let VERTICES = define
+ `VERTICES (FACE vs t) = vs`;;
+
+let FACE_TYPE = define
+ `FACE_TYPE (FACE vs t) = t`;;
+
+let FINAL_FACE = define
+ `FINAL_FACE (FACE vs Final) = T /\
+  FINAL_FACE (FACE vs Nonfinal) = F`;;
+
+let FINAL_FACE_TYPE = prove
+ (`!f. FINAL_FACE f <=> FACE_TYPE f = Final`,
+  REWRITE_TAC[FORALL_FACE_THM; FACE_TYPE] THEN GEN_TAC THEN
+  MATCH_MP_TAC facetype_INDUCT THEN
+  REWRITE_TAC[FINAL_FACE; FACETYPE_DISTINCT]);;
+
+let FACE_EQ = prove
+ (`!f. FACE (VERTICES f) (FACE_TYPE f) = f`,
+  REWRITE_TAC[FORALL_FACE_THM; VERTICES; FACE_TYPE]);;
+
+let SET_FINAL = new_definition
+ `SET_FINAL f = FACE (VERTICES f) Final`;;
+
+let FINAL_FACE_SET_FINAL = prove
+ (`!f. FINAL_FACE (SET_FINAL f)`,
+  REWRITE_TAC[SET_FINAL; FINAL_FACE]);;
+
+let VERTICES_SET_FINAL = prove
+ (`!f. VERTICES (SET_FINAL f) = VERTICES f`,
+  REWRITE_TAC[SET_FINAL; VERTICES]);;
+
+let NOT_FINAL_FACE_NE_FINAL = prove
+ (`!f f'. FINAL_FACE f /\ ~FINAL_FACE f' ==> ~(f = f')`,
+  MESON_TAC[]);;
+
+(* The successor of a vertex in the cyclic vertex list of a face.           *)
+
+let NEXT_VERTEX = new_definition
+ `NEXT_VERTEX f = let vs = VERTICES f in NEXT_ELEM vs (HD vs)`;;
+
+let NEXT_VERTICES = new_definition
+ `NEXT_VERTICES f n v = ITER n (NEXT_VERTEX f) v`;;
+
+let TRIANGLE = new_definition
+ `TRIANGLE f <=> LENGTH(VERTICES f) = 3`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Graphs.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let FACES = define
+ `FACES (GRAPH fs n fl h) = fs`;;
+
+let COUNT_VERTICES = define
+ `COUNT_VERTICES (GRAPH fs n fl h) = n`;;
+
+let FACE_LIST_AT = define
+ `FACE_LIST_AT (GRAPH fs n fl h) = fl`;;
+
+let HEIGHTS = define
+ `HEIGHTS (GRAPH fs n fl h) = h`;;
+
+let GRAPH_EQ = prove
+ (`!g. GRAPH (FACES g) (COUNT_VERTICES g) (FACE_LIST_AT g) (HEIGHTS g) = g`,
+  REWRITE_TAC[FORALL_GRAPH_THM; FACES; COUNT_VERTICES; FACE_LIST_AT;
+              HEIGHTS]);;
+
+let VERTICES_GRAPH = new_definition
+ `VERTICES_GRAPH g = UPT 0 (COUNT_VERTICES g)`;;
+
+let MEM_VERTICES_GRAPH = prove
+ (`!g v. MEM v (VERTICES_GRAPH g) <=> v < COUNT_VERTICES g`,
+  REWRITE_TAC[VERTICES_GRAPH; MEM_UPT; LE_0]);;
+
+let LENGTH_VERTICES_GRAPH = prove
+ (`!g. LENGTH(VERTICES_GRAPH g) = COUNT_VERTICES g`,
+  REWRITE_TAC[VERTICES_GRAPH; LENGTH_UPT; SUB_0]);;
+
+let FACES_AT = new_definition
+ `FACES_AT g v = EL v (FACE_LIST_AT g)`;;
+
+let HEIGHT = new_definition
+ `HEIGHT g v = EL v (HEIGHTS g)`;;
+
+(* The seed graph with one final n-gon and its nonfinal mirror image.       *)
+
+let SEED_GRAPH = new_definition
+ `SEED_GRAPH n =
+    let vs = UPT 0 n in
+    let fs = [FACE vs Final; FACE (REVERSE vs) Nonfinal] in
+    GRAPH fs n (REPLICATE n fs) (REPLICATE n 0)`;;
+
+let SEED_GRAPH_CLAUSES = prove
+ (`!n. FACES (SEED_GRAPH n) =
+         [FACE (UPT 0 n) Final; FACE (REVERSE (UPT 0 n)) Nonfinal] /\
+       COUNT_VERTICES (SEED_GRAPH n) = n /\
+       FACE_LIST_AT (SEED_GRAPH n) =
+         REPLICATE n [FACE (UPT 0 n) Final;
+                      FACE (REVERSE (UPT 0 n)) Nonfinal] /\
+       HEIGHTS (SEED_GRAPH n) = REPLICATE n 0`,
+  REWRITE_TAC[SEED_GRAPH; LET_DEF; LET_END_DEF; FACES; COUNT_VERTICES;
+              FACE_LIST_AT; HEIGHTS]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Final and nonfinal faces, final graphs and vertices.                      *)
+(* ------------------------------------------------------------------------- *)
+
+let FINALS = new_definition
+ `FINALS g = FILTER FINAL_FACE (FACES g)`;;
+
+let NON_FINALS = new_definition
+ `NON_FINALS g = FILTER (\f. ~FINAL_FACE f) (FACES g)`;;
+
+let FINAL_GRAPH = new_definition
+ `FINAL_GRAPH g <=> NON_FINALS g = []`;;
+
+let FINAL_GRAPH_ALL = prove
+ (`!g. FINAL_GRAPH g <=> ALL FINAL_FACE (FACES g)`,
+  GEN_TAC THEN REWRITE_TAC[FINAL_GRAPH; NON_FINALS] THEN
+  SPEC_TAC(`FACES g`,`l:face list`) THEN
+  LIST_INDUCT_TAC THEN REWRITE_TAC[FILTER; ALL] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[NOT_CONS_NIL]);;
+
+let FINAL_GRAPH_FINALS = prove
+ (`!g. FINAL_GRAPH g ==> FINALS g = FACES g`,
+  GEN_TAC THEN REWRITE_TAC[FINAL_GRAPH_ALL; FINALS] THEN
+  SPEC_TAC(`FACES g`,`l:face list`) THEN
+  LIST_INDUCT_TAC THEN ASM_SIMP_TAC[FILTER; ALL]);;
+
+let MEM_FINALS = prove
+ (`!g f. MEM f (FINALS g) <=> MEM f (FACES g) /\ FINAL_FACE f`,
+  REWRITE_TAC[FINALS; MEM_FILTER] THEN MESON_TAC[]);;
+
+let MEM_NON_FINALS = prove
+ (`!g f. MEM f (NON_FINALS g) <=> MEM f (FACES g) /\ ~FINAL_FACE f`,
+  REWRITE_TAC[NON_FINALS; MEM_FILTER] THEN MESON_TAC[]);;
+
+let FINAL_VERTEX = new_definition
+ `FINAL_VERTEX g v <=> ALL FINAL_FACE (FACES_AT g v)`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Counting faces at a vertex.                                               *)
+(* ------------------------------------------------------------------------- *)
+
+let DEGREE = new_definition
+ `DEGREE g v = LENGTH(FACES_AT g v)`;;
+
+let TRI = new_definition
+ `TRI g v = LENGTH(FILTER (\f. FINAL_FACE f /\ LENGTH(VERTICES f) = 3)
+                          (FACES_AT g v))`;;
+
+let QUAD = new_definition
+ `QUAD g v = LENGTH(FILTER (\f. FINAL_FACE f /\ LENGTH(VERTICES f) = 4)
+                           (FACES_AT g v))`;;
+
+let EXCEPT = new_definition
+ `EXCEPT g v = LENGTH(FILTER (\f. FINAL_FACE f /\ 5 <= LENGTH(VERTICES f))
+                             (FACES_AT g v))`;;
+
+let VERTEX_TYPE = new_definition
+ `VERTEX_TYPE g v = (TRI g v,QUAD g v,EXCEPT g v)`;;
+
+let EXCEPTIONAL_VERTEX = new_definition
+ `EXCEPTIONAL_VERTEX g v <=> ~(EXCEPT g v = 0)`;;
+
+let NEIGHBORS = new_definition
+ `NEIGHBORS g v = MAP (\f. NEXT_VERTEX f v) (FACES_AT g v)`;;
+
+let DIRECTED_LENGTH = new_definition
+ `DIRECTED_LENGTH f a b =
+    if a = b then 0 else LENGTH(BETWEEN (VERTICES f) a b) + 1`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Basic counting facts.                                                     *)
+(* ------------------------------------------------------------------------- *)
+
+let LENGTH_FILTER_LE = prove
+ (`!p l:A list. LENGTH(FILTER p l) <= LENGTH l`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN REWRITE_TAC[FILTER; LENGTH; LE_0] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[LENGTH] THEN ASM_ARITH_TAC);;
+
+let TRI_QUAD_EXCEPT_LE_DEGREE = prove
+ (`!g v. TRI g v + QUAD g v + EXCEPT g v <= DEGREE g v`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[TRI; QUAD; EXCEPT; DEGREE] THEN
+  SPEC_TAC(`FACES_AT g v`,`l:face list`) THEN
+  LIST_INDUCT_TAC THEN REWRITE_TAC[FILTER; LENGTH; LE_0] THEN
+  REPEAT(COND_CASES_TAC THEN ASM_REWRITE_TAC[LENGTH]) THEN
+  ASM_ARITH_TAC);;
+end;;

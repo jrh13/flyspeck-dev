@@ -1,0 +1,619 @@
+(* ========================================================================= *)
+(* tame/tame_driver.ml                                                       *)
+(*                                                                           *)
+(* The HOL driver of the certificate-checked enumeration: reads the          *)
+(* certificate stream produced by the native generator (measure/certgen),    *)
+(* evaluates the checks with the compiled evaluator, and composes the node   *)
+(* theorems TFO arch p g with the lemmas of tame_sound.ml, depth first.      *)
+(* Entry point: run_class p certfile returns |- TFO ARCHIVE p (SEED p) with  *)
+(* standard numerals.  Nothing here extends the trusted base: every step is  *)
+(* an inference on theorems of the loaded files.                             *)
+(* Requires the generated evaluator (the f_ functions) to be loaded.         *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_sound.hl";;
+flyspeck_needs "graph/tg_mono.hl";;
+flyspeck_needs "graph/tg_lbthm.hl";;
+flyspeck_needs "graph/tg_isothm.hl";;
+flyspeck_needs "graph/tg_newverts.hl";;
+flyspeck_needs "graph/tg_archive.hl";;
+flyspeck_needs "graph/tg_eval_db.hl";;
+flyspeck_needs "graph/tg_xdriver_lemmas.hl";;
+
+module Tg_driver = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+open Tg_arcs;;
+open Tg_split_inv;;
+open Tg_enum_props;;
+open Tg_subdiv_inv;;
+open Tg_xlbthm;;
+open Tg_xdriver_lemmas;;
+open Tg_enum_fast;;
+open Tg_enum_fast2;;
+open Tg_xstats;;
+open Tg_leaf;;
+open Tg_leaf_exec;;
+open Tg_eval_support;;
+open Tg_eval_db;;
+open Tg_eval_compiled;;
+
+(* ------------------------------------------------------------------------- *)
+(* Certificate parsing.                                                      *)
+(* ------------------------------------------------------------------------- *)
+
+type disposition =
+  | Child
+  | Prune_vcount
+  | Prune_degree of int
+  | Prune_lb of int list
+  | Untame10 | Untame11a | Untame12o
+  | Untame_lb of int list
+  | Iso of int * int * bool * int list * (int * int) list;;
+
+type node_cert = {
+  nc_set : int list;              (* lower-bound certificate set *)
+  nc_pruned : int list;           (* polygon sizes pruned here *)
+  nc_disp : disposition list;     (* successors of the kept sizes, in order *)
+};;
+
+let parse_cert_line line =
+  let toks = ref (List.filter (fun s -> s <> "")
+                    (String.split_on_char ' ' line)) in
+  let next () = match !toks with
+    | t :: rest -> toks := rest; t
+    | [] -> failwith "parse_cert_line: short line" in
+  let next_int () = int_of_string (next ()) in
+  let next_list () = let k = next_int () in
+    let rec go k acc = if k = 0 then List.rev acc
+                       else go (k - 1) (next_int () :: acc) in go k [] in
+  if next () <> "N" then failwith "parse_cert_line: not a node";
+  let cs = next_list () in
+  let pruned = next_list () in
+  let m = next_int () in
+  let rec disps k acc =
+    if k = 0 then List.rev acc else
+    let d = match next () with
+      | "C" -> Child
+      | "V" -> Prune_vcount
+      | "D" -> Prune_degree (next_int ())
+      | "L" -> Prune_lb (next_list ())
+      | "U10" -> Untame10
+      | "U11A" -> Untame11a
+      | "U12O" -> Untame12o
+      | "UL" -> Untame_lb (next_list ())
+      | "I" -> let c = next_int () in let q = next_int () in
+               let rv = next_int () = 1 in
+               let phi = next_list () in
+               let nm = next_int () in
+               let rec pairs k acc = if k = 0 then List.rev acc else
+                 let j = next_int () in let r = next_int () in
+                 pairs (k - 1) ((j, r) :: acc) in
+               Iso (c, q, rv, phi, pairs nm [])
+      | t -> failwith ("parse_cert_line: bad disposition " ^ t) in
+    disps (k - 1) (d :: acc) in
+  let ds = disps m [] in
+  if !toks <> [] then failwith "parse_cert_line: trailing tokens";
+  { nc_set = cs; nc_pruned = pruned; nc_disp = ds };;
+
+(* ------------------------------------------------------------------------- *)
+(* Term construction in the evaluator's numeral representation.              *)
+(* ------------------------------------------------------------------------- *)
+
+(* Every quotation is parsed once here: parsing at run time is slow and the *)
+(* parser is not safe for the parallel runner's domains (tame_parallel.ml). *)
+
+let num_ty = `:num` and num_pair_ty = `:num#num`;;
+let anum n = replace_numerals (mk_small_numeral n);;
+let anum_list l = mk_list (map anum l, num_ty);;
+let anum_pair_list l =
+  mk_list (map (fun (a, b) -> mk_pair (anum a, anum b)) l, num_pair_ty);;
+let t_tm = `T` and f_tm = `F`;;
+let dest_list_tm = dest_list;;
+let archive_tm = `ARCHIVE`;;
+let subdiv_face_tm = `SUBDIV_FACE`;;
+let generate_polygon_tm = `GENERATE_POLYGON`;;
+let vl_var = `vl:(num option)list`;;
+let i_var = `i:num`;;
+let g1_var = `g':graph`;;
+let map_subdiv_tm =
+  `MAP:((num option)list->graph)->((num option)list)list->graph list`;;
+let mem_graph_tm = `MEM:graph->graph list->bool`;;
+let all_num_tm = `ALL:(num->bool)->num list->bool`;;
+let el_chunks_tm =
+  `EL:num->((((num)list)list)list)list->(((num)list)list)list`;;
+let el_chunk_tm = `EL:num->(((num)list)list)list->((num)list)list`;;
+let length_chunk_tm = `LENGTH:(((num)list)list)list->num`;;
+let mem_archive_tm = `MEM:((num)list)list->(((num)list)list)list->bool`;;
+
+(* |- P from |- P <=> T *)
+let eqt_elim_eval th = EQT_ELIM th;;
+let eqf_elim_eval th = EQF_ELIM th;;
+
+(* ------------------------------------------------------------------------- *)
+(* The interface theorems in the evaluator's numeral form.                   *)
+(* ------------------------------------------------------------------------- *)
+
+let tfo_vcount = REPLACE_NUMERALS TFO_VCOUNT_PROVED;;
+let tfo_degree = TFO_DEGREE_PROVED;;
+let tfo_lb = TFO_LB_PROVED;;
+let untame_lb = UNTAME_LB_PROVED;;
+let tfo_size_eq = REPLACE_NUMERALS TFO_SIZE_WF_EQ;;
+let tfo_node_sizes = REPLACE_NUMERALS TFO_NODE_SIZES;;
+let tfo_final_untame = TFO_FINAL_UNTAME;;
+let tfo_final_iso = TFO_FINAL_ISO;;
+let tfo_mem_list_eq = TFO_MEM_LIST_EQ;;
+let tfo_vcount_pruned_vl = TFO_VCOUNT_PRUNED_VL;;
+let tfo_vlists = TFO_VLISTS;;
+let generate_polygon_vlists = GENERATE_POLYGON_VLISTS;;
+let untame_tame10 = UNTAME_TAME10 and untame_tame11a = UNTAME_TAME11A
+and untame_tame12o = UNTAME_TAME12O;;
+let mem_archive_el = REPLACE_NUMERALS MEM_ARCHIVE_EL;;
+let length_archive_chunks = REPLACE_NUMERALS LENGTH_ARCHIVE_CHUNKS;;
+
+(* The stronger lower bound (tame_xlb.ml, tame_xlbthm.ml): used when        *)
+(* xlb_mode is set; the driver then carries |- GRAPH_INV g through the tree  *)
+(* (tame_xdriver_lemmas.ml).                                                 *)
+
+let xlb_mode = ref false;;
+let tfo_xlb = TFO_XLB_PROVED;;
+let untame_xlb = UNTAME_XLB_PROVED;;
+let tfo_xsize = REPLACE_NUMERALS TFO_XSIZE_PROVED;;
+let poly_vlists_inv = REPLACE_NUMERALS POLY_VLISTS_INV;;
+let poly_vlists_fast_eq = REPLACE_NUMERALS POLY_VLISTS_FAST_EQ;;
+let poly_vlists_fast2_eq = REPLACE_NUMERALS POLY_VLISTS_FAST2_EQ;;
+let xsize_pruned_via_s = XSIZE_PRUNED_VIA_S;;
+let tfo_leaf = REPLACE_NUMERALS TFO_LEAF_PROVED;;
+let xlb_leaf_via_s = XLB_LEAF_VIA_S;;
+let node_inv_facts = NODE_INV_FACTS;;
+let seed_inv = SEED_INV;;
+let graph_inv_tm = `GRAPH_INV`;;
+(* |- ALL P (CONS h t) <=> P h /\ ALL P t at the vertex-list type, with its *)
+(* variables, for destructuring POLY_VLISTS_INV's conclusion by INST/EQ_MP   *)
+(* (REWRITE_RULE[ALL] cost 1.4-2.3 ms per node)                              *)
+let all_cons_vl, all_cons_vars =
+  (* the clauses of ALL have free variables P, h, t (not quantified) *)
+  let th = INST_TYPE [`:(num option)list`, aty] (CONJUNCT2 ALL) in
+  let l = lhs (concl th) in
+  let p = rand (rator l) and h, t = dest_cons (rand l) in
+  th, [p; h; t];;
+(* |- ALL P [h1; ...; hk] |-> the beta-reduced list [|- P h1; ...; |- P hk]  *)
+let rec all_elims th =
+  let tm = concl th in
+  let l = rand tm in
+  if is_const l then [] else
+  let p = rand (rator tm) and h, t = dest_cons l in
+  let th' = EQ_MP (INST (zip [p; h; t] all_cons_vars) all_cons_vl) th in
+  let th_h, th_t = CONJ_PAIR th' in
+  CONV_RULE BETA_CONV th_h :: all_elims th_t;;
+
+(* Instantiation of a lemma's leading universal variables by one INST      *)
+(* instead of SPECL (one beta pass over the body per variable, with graph   *)
+(* terms in the body): fast_specl lemma [t1; ...; tn].                      *)
+let fast_specl th =
+  let vs, _ = strip_forall (concl th) in
+  let th' = SPECL vs th in
+  fun tms ->
+    if length tms = length vs then INST (zip tms vs) th' else
+    let vs_n = fst (chop_list (length tms) vs) in
+    INST (zip tms vs_n) (SPECL vs_n th);;
+let sp_mem_archive_el = fast_specl mem_archive_el;;
+let sp_node_inv_facts = fast_specl node_inv_facts;;
+let sp_tfo_xsize = fast_specl tfo_xsize;;
+let sp_tfo_size_eq = fast_specl tfo_size_eq;;
+let sp_poly_vlists_inv = fast_specl poly_vlists_inv;;
+let sp_poly_vlists_fast_eq = fast_specl poly_vlists_fast_eq;;
+let sp_poly_vlists_fast2_eq = fast_specl poly_vlists_fast2_eq;;
+let sp_xsize_pruned_via_s = fast_specl xsize_pruned_via_s;;
+let sp_tfo_leaf = fast_specl tfo_leaf;;
+let sp_xlb_leaf_via_s = fast_specl xlb_leaf_via_s;;
+let sp_tfo_vcount_pruned_vl = fast_specl tfo_vcount_pruned_vl;;
+let sp_generate_polygon_vlists = fast_specl generate_polygon_vlists;;
+let sp_tfo_vlists = fast_specl tfo_vlists;;
+let sp_tfo_node_sizes = fast_specl tfo_node_sizes;;
+let sp_tfo_vcount = fast_specl tfo_vcount;;
+let sp_tfo_degree = fast_specl tfo_degree;;
+let sp_tfo_xlb = fast_specl tfo_xlb;;
+let sp_tfo_lb = fast_specl tfo_lb;;
+let sp_untame_tame10 = fast_specl untame_tame10;;
+let sp_untame_tame11a = fast_specl untame_tame11a;;
+let sp_untame_tame12o = fast_specl untame_tame12o;;
+let sp_tfo_final_untame = fast_specl tfo_final_untame;;
+let sp_untame_xlb = fast_specl untame_xlb;;
+let sp_untame_lb = fast_specl untame_lb;;
+let sp_tfo_final_iso = fast_specl tfo_final_iso;;
+(* ALL_CONS_INTRO at the two element types used by all_intro *)
+let sp_all_cons_intro_vl =
+  fast_specl (INST_TYPE [`:(num option)list`, aty] ALL_CONS_INTRO);;
+let sp_all_cons_intro_num =
+  fast_specl (INST_TYPE [`:num`, aty] ALL_CONS_INTRO);;
+let the_inv inv = match inv with
+  | Some th -> th
+  | None -> failwith "xlb_mode: no invariant theorem";;
+
+(* ------------------------------------------------------------------------- *)
+(* The archive in evaluator form, converted chunk by chunk on demand.        *)
+(* ------------------------------------------------------------------------- *)
+
+let archive_chunks_eq =
+  lazy (REPLACE_NUMERALS ARCHIVE_CHUNKS);;    (* |- ARCHIVE_CHUNKS = <lit> *)
+
+let chunk_cache = Hashtbl.create 256;;
+
+(* |- EL 'c ARCHIVE_CHUNKS = chunk_c  and  |- LENGTH chunk_c = 'len *)
+let archive_chunk c =
+  match Hashtbl.find_opt chunk_cache c with
+  | Some r -> r
+  | None ->
+      let ach = Lazy.force archive_chunks_eq in
+      let lit = rand (concl ach) in
+      let th_el = f_EL_num_list_list_list (anum c) lit None in
+      let th = TRANS (AP_TERM (mk_comb (el_chunks_tm, anum c)) ach) th_el in
+      let chunk = rand (concl th) in
+      let th_len = f_LENGTH_num_list_list chunk None in
+      let r = (th, chunk, th_len) in
+      Hashtbl.add chunk_cache c r; r;;
+
+(* |- MEM y ARCHIVE where y = EL q (EL c ARCHIVE_CHUNKS), returned with y *)
+let archive_member c q =
+  let (th_chunk, chunk, th_len) = archive_chunk c in
+  let th_elq = f_EL_num_list_list (anum q) chunk None in   (* EL q chunk = y *)
+  let y = rand (concl th_elq) in
+  let c_lt = eqt_elim_eval (f_LT (anum c) (rand (concl length_archive_chunks))
+                              None) in
+  let c_lt = EQ_MP (AP_TERM (rator (concl c_lt)) (SYM length_archive_chunks))
+                   c_lt in
+  let q_lt = eqt_elim_eval (f_LT (anum q) (rand (concl th_len)) None) in
+  let q_lt = EQ_MP (AP_TERM (rator (concl q_lt)) (SYM th_len)) q_lt in
+  let q_lt = EQ_MP (AP_TERM (rator (concl q_lt))
+                      (AP_TERM length_chunk_tm (SYM th_chunk))) q_lt in
+  let th = MP (sp_mem_archive_el [anum c; anum q]) (CONJ c_lt q_lt) in
+  (* rewrite EL q (EL c ARCHIVE_CHUNKS) to y *)
+  let el_eq = TRANS (AP_TERM (mk_comb (el_chunk_tm, anum q)) th_chunk)
+                    th_elq in
+  (y, EQ_MP (AP_THM (AP_TERM mem_archive_tm el_eq) archive_tm) th);;
+
+(* ------------------------------------------------------------------------- *)
+(* The node protocol.                                                        *)
+(* ------------------------------------------------------------------------- *)
+
+let tfo_tm = `TFO`;;
+let lt_tm = `(<):num->num->bool`;;
+let iso_cert_ok_tm = `ISO_CERT_OK`;;
+
+let nodes_done = Atomic.make 0 and t_start = ref 0.0;;
+let progress_every = ref 10000;;
+let max_nodes = ref 0;;              (* 0 = unlimited; else stop after that *)
+let cur_p = ref 0;;
+exception Node_limit;;
+
+let report () =
+  Printf.printf "nodes %d  %.1f s\n%!" (Atomic.get nodes_done)
+    (Unix.gettimeofday() -. !t_start);;
+
+(* Profiling (prof_on, sequential runs only: the table is not domain-safe):  *)
+(* wall-clock accumulators per category around the evaluator calls.         *)
+let prof_on = ref false;;
+let prof_tbl : (string, float ref * int ref) Hashtbl.t = Hashtbl.create 32;;
+let prof_add name dt =
+  match Hashtbl.find_opt prof_tbl name with
+  | Some (t, n) -> t := !t +. dt; incr n
+  | None -> Hashtbl.add prof_tbl name (ref dt, ref 1);;
+let timed name f =
+  if not !prof_on then f () else
+  let t0 = Unix.gettimeofday () in
+  let r = (try f () with e ->
+             Printf.printf "PROF_EXN %s: %s\n%!" name (Printexc.to_string e);
+             raise e) in
+  prof_add name (Unix.gettimeofday () -. t0); r;;
+let print_prof () =
+  let l = Hashtbl.fold (fun k (t, n) acc -> (k, !t, !n) :: acc) prof_tbl [] in
+  let l = List.sort (fun (_, a, _) (_, b, _) -> compare b a) l in
+  let tot = List.fold_left (fun s (_, t, _) -> s +. t) 0.0 l in
+  Printf.printf "PROF total timed %.1f s\n" tot;
+  List.iter (fun (k, t, n) ->
+      Printf.printf "PROF %-12s %8.1f s %5.1f%% %9d calls %7.3f ms/call\n"
+        k t (100.0 *. t /. tot) n (1000.0 *. t /. float n)) l;
+  Printf.printf "%!";;
+
+(* |- ALL P l from |- P h for the elements h of the literal list l *)
+let all_intro p_tm ths l_tm =
+  let ty = type_of p_tm in
+  let elty = fst(dest_fun_ty ty) in
+  let nil_th = ISPEC p_tm ALL_NIL_INTRO in
+  let elts = dest_list l_tm in
+  itlist2 (fun th h acc ->
+     let th' = if is_abs p_tm then
+                 EQ_MP (SYM (BETA_CONV (mk_comb (p_tm, h)))) th
+               else th in
+     let sp = if elty = `:num` then sp_all_cons_intro_num
+              else if elty = `:(num option)list` then sp_all_cons_intro_vl
+              else fast_specl (INST_TYPE [elty, aty] ALL_CONS_INTRO) in
+     MP (sp [p_tm; h; rand (concl acc)]) (CONJ th' acc))
+   ths elts nil_th;;
+
+let inverse_matching m1 =
+  let n = List.length m1 in
+  let arr = Array.make n (0, 0) in
+  List.iteri (fun i (j, r) -> arr.(j) <- (i, r)) m1;
+  Array.to_list arr;;
+
+(* Hook for the parallel runner (tame_parallel.ml): called before a child  *)
+(* node is processed, with the channel positioned at the child's first line *)
+(* and the child's graph; Some th supplies the child's theorem instead.     *)
+
+let task_hook : (in_channel -> term -> thm option -> thm option) ref =
+  ref (fun _ _ _ -> None);;
+
+let rec node p_tm arch g inv ic =
+  let nc = timed "parse" (fun () -> parse_cert_line (input_line ic)) in
+  let cs_tm = anum_list nc.nc_set in
+  let (th_fll, th_nf, th_nnull, th_f, th_v) = timed "node_pre" (fun () ->
+    let th_fll = eqt_elim_eval (f_FACE_LIST_LEN g None) in
+    let th_nf = f_NON_FINALS g None in
+    let fs = rand (concl th_nf) in
+    let th_nnull = eqf_elim_eval (f_NULL_face fs None) in
+    let th_f = f_MINIMAL_FACE fs None in
+    let f = rand (concl th_f) in
+    let th_v = f_MINIMAL_VERTEX g f None in
+    (th_fll, th_nf, th_nnull, th_f, th_v)) in
+  let fs = rand (concl th_nf) in
+  let f = rand (concl th_f) in
+  let v = rand (concl th_v) in
+  let th_cert = lazy (timed "cert_node" (fun () ->
+                  eqt_elim_eval (f_LB_CERT_OK g cs_tm None))) in
+  let th_wf = lazy (eqt_elim_eval (f_MINFACE_WF g f None)) in
+  let th_xcert = lazy (timed "xcert_node" (fun () ->
+                   eqt_elim_eval (f_XLB_CERT_OK g cs_tm None))) in
+  let th_xlbs = lazy (timed "xlbs_node" (fun () -> f_XLB_S g cs_tm None)) in
+  let th_fslb = lazy (timed "fslb_node" (fun () ->
+                  f_FACE_SQUANDER_LOWER_BOUND g None)) in
+  let th_facts = lazy (timed "inv_facts" (fun () ->
+    MP (sp_node_inv_facts [g; fs; f; v])
+       (end_itlist CONJ [the_inv inv; th_nf; th_nnull; th_f; th_v]))) in
+  let disps = ref nc.nc_disp in
+  let pop () = match !disps with
+    | d :: rest -> disps := rest; d
+    | [] -> failwith "node: certificate has too few dispositions" in
+  let size_thm i =
+    let i_tm = anum i in
+    let th_3 = eqt_elim_eval (f_LE (anum 3) i_tm None) in
+    if mem i nc.nc_pruned then
+      (if !xlb_mode then
+         let th_s = Lazy.force th_xlbs in
+         let s_tm = rand (concl th_s) in
+         let th_sp_s = timed "xsize" (fun () ->
+           eqt_elim_eval (f_XSIZE_PRUNED_S g cs_tm f i_tm s_tm None)) in
+         let th_sp = EQ_MP (SYM (MP (sp_xsize_pruned_via_s
+                                       [g; cs_tm; f; i_tm; s_tm]) th_s))
+                           th_sp_s in
+         MP (sp_tfo_xsize [arch; p_tm; g; cs_tm; i_tm; fs; f; v])
+            (end_itlist CONJ [the_inv inv; Lazy.force th_xcert; th_sp; th_3;
+                              th_nf; th_nnull; th_f; th_v])
+       else
+         let th_sp = eqt_elim_eval (f_SIZE_PRUNED g cs_tm i_tm None) in
+         MP (sp_tfo_size_eq [arch; p_tm; g; cs_tm; i_tm; fs; f; v])
+            (end_itlist CONJ [th_fll; Lazy.force th_cert; th_sp; th_3;
+                              th_nf; th_nnull; th_f; th_v; Lazy.force th_wf]))
+    else
+      let th_vls = timed "vlists" (fun () ->
+        if !xlb_mode then
+          (* |- POLY_VLISTS i v f g = POLY_VLISTS_FAST i v f g = <literal> *)
+          let th_memf, th_rest = CONJ_PAIR (Lazy.force th_facts) in
+          let th_memv = CONJUNCT2 th_rest in
+          let th_eq = MP (sp_poly_vlists_fast2_eq [g; f; v; i_tm])
+                         (end_itlist CONJ [the_inv inv; th_memf; th_memv;
+                                           th_3]) in
+          TRANS th_eq (f_POLY_VLISTS_FAST2 i_tm v f g None)
+        else f_POLY_VLISTS i_tm v f g None) in
+      let vls_tm = rand (concl th_vls) in
+      let vls = dest_list vls_tm in
+      let subdiv_tm = list_mk_comb (subdiv_face_tm, [g; f]) in
+      (* in xlb_mode, |- GRAPH_INV (SUBDIV_FACE g f vl) for every vl *)
+      let invs = timed "invs" (fun () ->
+        if !xlb_mode && vls <> [] then
+          let th_memf, th_rest = CONJ_PAIR (Lazy.force th_facts) in
+          let th_nff, th_memv = CONJ_PAIR th_rest in
+          let th_all = MP (sp_poly_vlists_inv [g; f; v; i_tm])
+                          (end_itlist CONJ [the_inv inv; th_memf; th_nff;
+                                            th_memv; th_3]) in
+          let th_lit = EQ_MP (AP_TERM (rator (concl th_all)) th_vls) th_all in
+          let l = all_elims th_lit in
+          if length l <> length vls then failwith "node: invariant list"
+          else l
+        else []) in
+      (* in xlb_mode, per vl: |- !cs. XLB_LEAF g f vl cs ==> TFO .. (SUBDIV) *)
+      let leaf_thms = timed "invs" (fun () ->
+        if !xlb_mode && vls <> [] then
+          let th_memf, th_rest = CONJ_PAIR (Lazy.force th_facts) in
+          let th_nff, th_memv = CONJ_PAIR th_rest in
+          let th_all = MP (sp_tfo_leaf [arch; p_tm; g; f; v; i_tm])
+                          (end_itlist CONJ [the_inv inv; th_memf; th_nff;
+                                            th_memv; th_3]) in
+          let th_lit = EQ_MP (AP_TERM (rator (concl th_all)) th_vls) th_all in
+          all_elims th_lit
+        else []) in
+      let ths = List.mapi (fun j vl ->
+          match pop () with
+          | Prune_lb cs when !xlb_mode ->
+              (* pruned child checked on the parent, no construction *)
+              let cs_tm = anum_list cs in
+              let th_s = Lazy.force th_fslb in
+              let s_tm = rand (concl th_s) in
+              let th_ok_s = timed "leaf" (fun () ->
+                eqt_elim_eval (f_XLB_LEAF_S g f vl cs_tm s_tm None)) in
+              let th_ok = EQ_MP (SYM (MP (sp_xlb_leaf_via_s
+                                            [g; f; vl; cs_tm; s_tm]) th_s))
+                                th_ok_s in
+              MP (SPEC cs_tm (el j leaf_thms)) th_ok
+          | Prune_vcount ->
+              let th = timed "vcount_vl" (fun () ->
+                         eqt_elim_eval (f_VCOUNT_PRUNED_VL g vl None)) in
+              MP (sp_tfo_vcount_pruned_vl [arch; p_tm; g; f; vl]) th
+          | d ->
+              let th_sd = timed "subdiv" (fun () ->
+                            f_SUBDIV_FACE g f vl None) in
+              let g' = rand (concl th_sd) in
+              let inv' = if !xlb_mode then
+                           Some (EQ_MP (AP_TERM graph_inv_tm th_sd)
+                                       (el j invs))
+                         else None in
+              let th = succ_thm p_tm arch g' d inv' ic in
+              EQ_MP (SYM (AP_TERM (mk_comb (mk_comb (tfo_tm, arch), p_tm))
+                                  th_sd))
+                    th) vls in
+      timed "compose_size" (fun () ->
+      let pred = mk_abs (vl_var,
+                   list_mk_comb (tfo_tm,
+                                 [arch; p_tm; mk_comb (subdiv_tm, vl_var)])) in
+      let th_all = all_intro pred ths vls_tm in
+      let th_eq = TRANS (sp_generate_polygon_vlists [i_tm; v; f; g])
+                        (AP_TERM (mk_comb (map_subdiv_tm, subdiv_tm))
+                                 th_vls) in
+      MP (sp_tfo_vlists [arch; p_tm; g; f; vls_tm; lhand (concl th_eq)])
+         (CONJ th_all th_eq)) in
+  let sizes = 3 -- (!cur_p + 3) in
+  let size_ths = map size_thm sizes in
+  if !disps <> [] then failwith "node: certificate has too many dispositions";
+  let th = timed "compose_node" (fun () ->
+  let th_sizes = f_POLY_SIZES p_tm None in
+  let pred = mk_abs (i_var,
+    list_mk_forall ([g1_var],
+      mk_imp (list_mk_comb (mem_graph_tm,
+                [g1_var;
+                 list_mk_comb (generate_polygon_tm, [i_var; v; f; g])]),
+              list_mk_comb (tfo_tm, [arch; p_tm; g1_var])))) in
+  let th_all = all_intro pred size_ths (rand (concl th_sizes)) in
+  let th_all = EQ_MP (AP_TERM (mk_comb (all_num_tm, pred)) (SYM th_sizes))
+                     th_all in
+  MP (sp_tfo_node_sizes [arch; p_tm; g; fs; f; v])
+     (end_itlist CONJ [th_nf; th_nnull; th_f; th_v; th_all])) in
+  let done_now = Atomic.fetch_and_add nodes_done 1 + 1 in
+  if done_now mod !progress_every = 0 then report ();
+  if !max_nodes > 0 && done_now >= !max_nodes then raise Node_limit;
+  th
+
+and succ_thm p_tm arch g' d inv' ic =
+  match d with
+  | Child ->
+      (match !task_hook ic g' inv' with
+       | Some th -> th
+       | None -> node p_tm arch g' inv' ic)
+  | Prune_vcount -> timed "vcount" (fun () ->
+      let th_c = f_COUNT_VERTICES g' None in
+      let th_lt = f_LT (anum 15) (rand (concl th_c)) None in
+      let th = eqt_elim_eval
+        (TRANS (AP_TERM (mk_comb (lt_tm, anum 15)) th_c) th_lt) in
+      MP (sp_tfo_vcount [arch; p_tm; g']) th)
+  | Prune_degree v -> timed "degree" (fun () ->
+      let th1 = eqt_elim_eval (f_FACE_LIST_LEN g' None) in
+      let th2 = eqt_elim_eval (f_DEGREE_PRUNED g' (anum v) None) in
+      MP (sp_tfo_degree [arch; p_tm; g'; anum v]) (CONJ th1 th2))
+  | Prune_lb cs ->
+      let cs_tm = anum_list cs in
+      if !xlb_mode then
+        let th2 = timed "child_xcert" (fun () ->
+                    eqt_elim_eval (f_XLB_CERT_OK g' cs_tm None)) in
+        let th3 = timed "child_xlb" (fun () ->
+                    eqt_elim_eval (f_XLB_PRUNED g' cs_tm None)) in
+        MP (sp_tfo_xlb [arch; p_tm; g'; cs_tm])
+           (end_itlist CONJ [the_inv inv'; th2; th3])
+      else
+      let th1 = eqt_elim_eval (f_FACE_LIST_LEN g' None) in
+      let th2 = eqt_elim_eval (f_LB_CERT_OK g' cs_tm None) in
+      let th3 = eqt_elim_eval (f_LB_PRUNED g' cs_tm None) in
+      MP (sp_tfo_lb [arch; p_tm; g'; cs_tm])
+         (end_itlist CONJ [th1; th2; th3])
+  | Untame10 | Untame11a | Untame12o -> timed "untame" (fun () ->
+      let th_fin = eqt_elim_eval (f_FINAL_GRAPH g' None) in
+      let th_u = match d with
+        | Untame10 ->
+            MP (sp_untame_tame10 [g']) (eqf_elim_eval (f_TAME10 g' None))
+        | Untame11a ->
+            MP (sp_untame_tame11a [g']) (eqf_elim_eval (f_TAME11A g' None))
+        | _ ->
+            MP (sp_untame_tame12o [g']) (eqf_elim_eval (f_TAME12O g' None)) in
+      MP (sp_tfo_final_untame [arch; p_tm; g']) (CONJ th_fin th_u))
+  | Untame_lb cs -> timed "untame_lb" (fun () ->
+      let cs_tm = anum_list cs in
+      let th_fin = eqt_elim_eval (f_FINAL_GRAPH g' None) in
+      let th_u =
+        if !xlb_mode then
+          let th2 = eqt_elim_eval (f_XLB_CERT_OK g' cs_tm None) in
+          let th3 = eqt_elim_eval (f_XLB_PRUNED g' cs_tm None) in
+          MP (sp_untame_xlb [g'; cs_tm])
+             (end_itlist CONJ [the_inv inv'; th_fin; th2; th3])
+        else
+          let th1 = eqt_elim_eval (f_FACE_LIST_LEN g' None) in
+          let th2 = eqt_elim_eval (f_LB_CERT_OK g' cs_tm None) in
+          let th3 = eqt_elim_eval (f_LB_PRUNED g' cs_tm None) in
+          MP (sp_untame_lb [g'; cs_tm])
+             (end_itlist CONJ [th1; th_fin; th2; th3]) in
+      MP (sp_tfo_final_untame [arch; p_tm; g']) (CONJ th_fin th_u))
+  | Iso (c, q, rv, phi, m1) -> timed "iso" (fun () ->
+      let th_fin = eqt_elim_eval (f_FINAL_GRAPH g' None) in
+      let th_fg = f_FGRAPH g' None in
+      let fs1 = rand (concl th_fg) in
+      let (y, th_mem) = archive_member c q in
+      let cert = mk_pair (anum_list phi,
+                   mk_pair ((if rv then t_tm else f_tm),
+                     mk_pair (anum_pair_list m1,
+                              anum_pair_list (inverse_matching m1)))) in
+      let th_ok = eqt_elim_eval (f_ISO_CERT_OK fs1 y cert None) in
+      let eq = AP_THM (AP_THM (AP_TERM iso_cert_ok_tm th_fg) y) cert in
+      let th_okfg = EQ_MP (SYM eq) th_ok in
+      MP (sp_tfo_final_iso [arch; p_tm; g'; y; cert])
+         (end_itlist CONJ [th_fin; th_mem; th_okfg]));;
+
+(* ------------------------------------------------------------------------- *)
+(* Entry point.                                                              *)
+(* ------------------------------------------------------------------------- *)
+
+let run_class p certfile =
+  let ic = open_in certfile in
+  Atomic.set nodes_done 0; t_start := Unix.gettimeofday(); cur_p := p;
+  let p_tm = anum p in
+  let arch = archive_tm in
+  let th_seed = f_SEED p_tm None in
+  let g0 = rand (concl th_seed) in
+  let inv0 = if !xlb_mode then
+               Some (EQ_MP (AP_TERM graph_inv_tm th_seed) (SPEC p_tm seed_inv))
+             else None in
+  let th = node p_tm arch g0 inv0 ic in
+  close_in ic;
+  report ();
+  let th = EQ_MP (SYM (AP_TERM (mk_comb (mk_comb (tfo_tm, arch), p_tm))
+                               th_seed))
+                 th in
+  (* back to the standard numeral: |- 'p = p *)
+  (* SUBS, not rewriting: for p = 0 the equation is |- _0 = NUMERAL _0,
+     whose right-hand side contains the left, and the rewriter drops it *)
+  let p_eq = NUMERAL_BACK p in
+  SUBS [p_eq] th;;
+end;;

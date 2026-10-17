@@ -1,0 +1,437 @@
+(* ========================================================================= *)
+(* tame/tame_mono.ml                                                         *)
+(*                                                                           *)
+(* Monotonicity along the enumeration.  A NEXT_PLANE successor arises from   *)
+(* the graph by a sequence of refinement STEPs: splitting a nonfinal face    *)
+(* (SPLIT_FACE) or finalising a nonfinal face (MAKE_FACE_FINAL).  Each step  *)
+(* keeps the vertex count and the face-table length growing together, keeps  *)
+(* every final face (as a multiset), never touches the face list of a final  *)
+(* vertex, and never removes a final face from, nor shortens, the face list  *)
+(* of any existing vertex.  Lifted along REACH these give the pruning        *)
+(* lemmas TFO_VCOUNT and TFO_DEGREE and the facts the lower-bound theorem    *)
+(* needs (tame_lbthm.ml).                                                    *)
+(*                                                                           *)
+(* Proof route: the face table of a split is the old one transformed by four *)
+(* MAP_AT (REPLACE oldF ys) passes and extended with new rows; a relation R  *)
+(* that is reflexive, transitive and satisfied by l |-> REPLACE oldF ys l    *)
+(* (ys nonempty) therefore relates every old row to its new version          *)
+(* (SPLIT_FACE_FACES_AT_REL).  Two instances of R give the fixed face lists  *)
+(* of final vertices (R l m <=> ~MEM oldF l ==> m = l) and the growth of     *)
+(* lengths and final-face multisets.  The REACH versions follow from the     *)
+(* RTC STEP versions, proved by RTC_INDUCT_L.                                *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_sound.hl";;
+
+module Tg_mono = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+
+(* ------------------------------------------------------------------------- *)
+(* Refinement steps.                                                         *)
+(* ------------------------------------------------------------------------- *)
+
+let SPLIT_STEP = new_definition
+ `SPLIT_STEP g g' <=>
+    ?ram1 ram2 oldF newVs.
+      ~FINAL_FACE oldF /\ g' = SND(SND(SPLIT_FACE g ram1 ram2 oldF newVs))`;;
+
+let FINAL_STEP = new_definition
+ `FINAL_STEP g g' <=> ?f. ~FINAL_FACE f /\ g' = MAKE_FACE_FINAL f g`;;
+
+let STEP = new_definition
+ `STEP g g' <=> SPLIT_STEP g g' \/ FINAL_STEP g g'`;;
+
+(* The faces produced by a split are nonfinal.                              *)
+
+let SPLIT_FACE_PAIR_NONFINAL = prove
+ (`!f ram1 ram2 newVs.
+     ~FINAL_FACE (FST (SPLIT_FACE_PAIR f ram1 ram2 newVs)) /\
+     ~FINAL_FACE (SND (SPLIT_FACE_PAIR f ram1 ram2 newVs))`,
+  REWRITE_TAC[SPLIT_FACE_PAIR_EXEC; FINAL_FACE]);;
+
+let SPLIT_FACE_COMPONENTS = prove
+ (`!g ram1 ram2 oldF newVs.
+     FST (SPLIT_FACE g ram1 ram2 oldF newVs) =
+       FST (SPLIT_FACE_PAIR oldF ram1 ram2 newVs) /\
+     FST (SND (SPLIT_FACE g ram1 ram2 oldF newVs)) =
+       SND (SPLIT_FACE_PAIR oldF ram1 ram2 newVs)`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[SPLIT_FACE] THEN
+  REWRITE_TAC[LET_ELIM_THM]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The successors of a graph are reached by steps.                           *)
+(* ------------------------------------------------------------------------- *)
+
+let SUBDIV_FACE_REC_STEPS = prove
+ (`!vos g f u n. ~FINAL_FACE f ==> RTC STEP g (SUBDIV_FACE_REC vos g f u n)`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[SUBDIV_FACE_REC_CLAUSES] THENL
+   [REPEAT STRIP_TAC THEN MATCH_MP_TAC RTC_INC THEN
+    REWRITE_TAC[STEP; FINAL_STEP] THEN ASM_MESON_TAC[];
+    ALL_TAC] THEN
+  REPEAT GEN_TAC THEN DISCH_TAC THEN
+  STRUCT_CASES_TAC(ISPEC `h:num option` (cases "option")) THEN
+  REWRITE_TAC[SUBDIV_FACE_REC_CLAUSES] THENL [ASM_SIMP_TAC[]; ALL_TAC] THEN
+  COND_CASES_TAC THENL [ASM_SIMP_TAC[]; ALL_TAC] THEN
+  REWRITE_TAC[LET_ELIM_THM] THEN MATCH_MP_TAC RTC_TRANS THEN
+  EXISTS_TAC
+   `SND(SND(SPLIT_FACE g u a f
+             (UPT (COUNT_VERTICES g) (COUNT_VERTICES g + n))))` THEN
+  CONJ_TAC THENL
+   [MATCH_MP_TAC RTC_INC THEN REWRITE_TAC[STEP; SPLIT_STEP] THEN
+    ASM_MESON_TAC[];
+    FIRST_X_ASSUM MATCH_MP_TAC THEN
+    REWRITE_TAC[SPLIT_FACE_COMPONENTS; SPLIT_FACE_PAIR_NONFINAL]]);;
+
+let GENERATE_POLYGON_STEPS = prove
+ (`!i v f g g'. ~FINAL_FACE f /\ MEM g' (GENERATE_POLYGON i v f g)
+                ==> RTC STEP g g'`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[GENERATE_POLYGON_EXEC; MEM_MAP] THEN
+  STRIP_TAC THEN ASM_REWRITE_TAC[SUBDIV_FACE] THEN
+  MATCH_MP_TAC SUBDIV_FACE_REC_STEPS THEN ASM_REWRITE_TAC[]);;
+
+let NEXT_PLANE_STEPS = prove
+ (`!p g g'. MEM g' (NEXT_PLANE p g) ==> RTC STEP g g'`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[NEXT_PLANE; LET_ELIM_THM] THEN
+  COND_CASES_TAC THEN REWRITE_TAC[MEM; MEM_FLAT; MEM_MAP] THEN
+  SUBGOAL_THEN `~FINAL_FACE (MINIMAL_FACE (NON_FINALS g))` ASSUME_TAC THENL
+   [REWRITE_TAC[MINIMAL_FACE] THEN
+    ASM_MESON_TAC[MEM_MINIMAL_EL; MEM_NON_FINALS];
+    ASM_MESON_TAC[GENERATE_POLYGON_STEPS]]);;
+
+let REACH_RTC_STEP = prove
+ (`!p g g'. REACH p g g' ==> RTC STEP g g'`,
+  GEN_TAC THEN MATCH_MP_TAC REACH_INDUCT_REL THEN
+  MESON_TAC[RTC_REFL; RTC_TRANS; NEXT_PLANE_STEPS]);;
+
+(* ------------------------------------------------------------------------- *)
+(* List facts: REPLACE and FILTER, lengths and sub-multisets.                *)
+(* ------------------------------------------------------------------------- *)
+
+let SUBMSET_CONS = prove
+ (`!h:A l m. SUBMSET l m ==> SUBMSET (CONS h l) (CONS h m)`,
+  REWRITE_TAC[SUBMSET; COUNT] THEN REPEAT STRIP_TAC THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[LE_SUC]);;
+
+let SUBMSET_FILTER_REPLACE = prove
+ (`!P (x:A) ys l. ~P x ==> SUBMSET (FILTER P l) (FILTER P (REPLACE x ys l))`,
+  GEN_TAC THEN GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[REPLACE; FILTER; SUBMSET_REFL] THEN DISCH_TAC THEN
+  ASM_CASES_TAC `h:A = x` THEN ASM_REWRITE_TAC[] THENL
+   [ASM_REWRITE_TAC[FILTER_APPEND; SUBMSET_APPEND_L];
+    REWRITE_TAC[FILTER] THEN COND_CASES_TAC THEN ASM_SIMP_TAC[SUBMSET_CONS]]);;
+
+let LENGTH_REPLACE_LE = prove
+ (`!x:A ys l. ~(ys = []) ==> LENGTH l <= LENGTH (REPLACE x ys l)`,
+  REPEAT STRIP_TAC THEN ASM_CASES_TAC `MEM (x:A) l` THENL
+   [MP_TAC(ISPECL [`x:A`; `ys:A list`; `l:A list`] LENGTH_REPLACE) THEN
+    ASM_REWRITE_TAC[] THEN
+    SUBGOAL_THEN `~(LENGTH(ys:A list) = 0)` MP_TAC THENL
+     [ASM_REWRITE_TAC[LENGTH_EQ_NIL]; ARITH_TAC];
+    ASM_SIMP_TAC[REPLACE_NOT_MEM; LE_REFL]]);;
+
+let FILTER_FILTER = prove
+ (`!P Q l:A list. FILTER P (FILTER Q l) = FILTER (\x. Q x /\ P x) l`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN REWRITE_TAC[FILTER] THEN
+  REPEAT(COND_CASES_TAC THEN ASM_REWRITE_TAC[FILTER]));;
+
+let LENGTH_FILTER_LIST_SUM = prove
+ (`!P l:A list. LENGTH (FILTER P l) = LIST_SUM (\x. if P x then 1 else 0) l`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN REWRITE_TAC[FILTER; LIST_SUM; LENGTH] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[LENGTH] THEN ARITH_TAC);;
+
+let LENGTH_FILTER_SUBMSET = prove
+ (`!P l m:A list. SUBMSET l m ==> LENGTH (FILTER P l) <= LENGTH (FILTER P m)`,
+  REPEAT STRIP_TAC THEN REWRITE_TAC[LENGTH_FILTER_LIST_SUM] THEN
+  MATCH_MP_TAC LIST_SUM_SUBMSET THEN ASM_REWRITE_TAC[]);;
+
+(* A relation preserved by h relates each row of xs to its MAP_AT image.     *)
+
+let EL_MAP_AT_REL = prove
+ (`!R (h:A->A).
+     (!l. R l l) /\ (!l m n. R l m /\ R m n ==> R l n) /\ (!l. R l (h l))
+     ==> !ns xs j. j < LENGTH xs ==> R (EL j xs) (EL j (MAP_AT ns h xs))`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[MAP_AT] THEN REPEAT STRIP_TAC THEN
+  COND_CASES_TAC THEN ASM_SIMP_TAC[] THEN
+  FIRST_X_ASSUM(MP_TAC o SPECL
+   [`LIST_UPDATE xs h' ((h:A->A) (EL h' xs))`; `j:num`]) THEN
+  ASM_SIMP_TAC[LENGTH_LIST_UPDATE; EL_LIST_UPDATE] THEN
+  COND_CASES_TAC THEN ASM_MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The components of the graphs produced by a split and by finalisation.     *)
+(* ------------------------------------------------------------------------- *)
+
+let SPLIT_FACE_COUNT_VERTICES = prove
+ (`!g ram1 ram2 oldF newVs.
+     COUNT_VERTICES (SND(SND(SPLIT_FACE g ram1 ram2 oldF newVs))) =
+     COUNT_VERTICES g + LENGTH newVs`,
+  REWRITE_TAC[SPLIT_FACE; LET_ELIM_THM; COUNT_VERTICES]);;
+
+let SPLIT_FACE_FACES = prove
+ (`!g ram1 ram2 oldF newVs.
+     FACES (SND(SND(SPLIT_FACE g ram1 ram2 oldF newVs))) =
+     APPEND (REPLACE oldF [SND(SPLIT_FACE_PAIR oldF ram1 ram2 newVs)]
+                     (FACES g))
+            [FST(SPLIT_FACE_PAIR oldF ram1 ram2 newVs)]`,
+  REWRITE_TAC[SPLIT_FACE; LET_ELIM_THM; FACES]);;
+
+let SPLIT_FACE_LENGTH_FACE_LIST_AT = prove
+ (`!g ram1 ram2 oldF newVs.
+     LENGTH (FACE_LIST_AT (SND(SND(SPLIT_FACE g ram1 ram2 oldF newVs)))) =
+     LENGTH (FACE_LIST_AT g) + LENGTH newVs`,
+  REWRITE_TAC[SPLIT_FACE; LET_ELIM_THM; REPLACE_FACES_AT; FACE_LIST_AT;
+              LENGTH_APPEND; LENGTH_MAP_AT; LENGTH_REPLICATE]);;
+
+(* The face list of an old vertex after a split: the old one transformed by  *)
+(* four MAP_AT (REPLACE oldF ys) passes with nonempty ys, so any reflexive   *)
+(* transitive relation satisfied by these replacements relates old to new.   *)
+
+let SPLIT_FACE_FACES_AT_REL = prove
+ (`!R oldF.
+     (!l. R l l) /\ (!l m n. R l m /\ R m n ==> R l n) /\
+     (!ys l. ~(ys = []) ==> R l (REPLACE oldF ys l))
+     ==> !g ram1 ram2 newVs v.
+           v < LENGTH (FACE_LIST_AT g)
+           ==> R (FACES_AT g v)
+                 (FACES_AT (SND(SND(SPLIT_FACE g ram1 ram2 oldF newVs))) v)`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  SUBGOAL_THEN
+   `!ns ys (xs:(face list)list) j (l:face list).
+      j < LENGTH xs /\ ~(ys = []) /\ R l (EL j xs)
+      ==> R l (EL j (MAP_AT ns (REPLACE (oldF:face) ys) xs))`
+  ASSUME_TAC THENL
+   [REPEAT STRIP_TAC THEN
+    MP_TAC(ISPECL [`R:face list->face list->bool`; `REPLACE (oldF:face) ys`]
+      EL_MAP_AT_REL) THEN
+    ANTS_TAC THENL [ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[]; ALL_TAC] THEN
+    DISCH_THEN(MP_TAC o SPECL
+     [`ns:num list`; `xs:(face list)list`; `j:num`]) THEN
+    ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[];
+    ALL_TAC] THEN
+  REPEAT GEN_TAC THEN DISCH_TAC THEN
+  REWRITE_TAC[FACES_AT; SPLIT_FACE; LET_ELIM_THM; REPLACE_FACES_AT;
+              FACE_LIST_AT] THEN
+  ASM_REWRITE_TAC[EL_APPEND; LENGTH_MAP_AT] THEN
+  REPLICATE_TAC 4
+   (FIRST_ASSUM MATCH_MP_TAC THEN
+    ASM_REWRITE_TAC[LENGTH_MAP_AT; NOT_CONS_NIL]));;
+
+let MAKE_FACE_FINAL_CLAUSES = prove
+ (`!f g. FACES (MAKE_FACE_FINAL f g) = REPLACE f [SET_FINAL f] (FACES g) /\
+         COUNT_VERTICES (MAKE_FACE_FINAL f g) = COUNT_VERTICES g /\
+         FACE_LIST_AT (MAKE_FACE_FINAL f g) =
+         MAP (MAKE_FACE_FINAL_LIST f) (FACE_LIST_AT g) /\
+         HEIGHTS (MAKE_FACE_FINAL f g) = HEIGHTS g`,
+  REWRITE_TAC[MAKE_FACE_FINAL; FACES; COUNT_VERTICES; FACE_LIST_AT; HEIGHTS;
+              MAKE_FACE_FINAL_LIST]);;
+
+let FACES_AT_MAKE_FACE_FINAL = prove
+ (`!f g v. v < LENGTH (FACE_LIST_AT g)
+           ==> FACES_AT (MAKE_FACE_FINAL f g) v =
+               REPLACE f [SET_FINAL f] (FACES_AT g v)`,
+  SIMP_TAC[FACES_AT; MAKE_FACE_FINAL_CLAUSES; EL_MAP; MAKE_FACE_FINAL_LIST]);;
+
+(* ------------------------------------------------------------------------- *)
+(* What one step preserves.                                                  *)
+(* ------------------------------------------------------------------------- *)
+
+let STEP_COUNT_VERTICES = prove
+ (`!g g'. STEP g g' ==> COUNT_VERTICES g <= COUNT_VERTICES g'`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[STEP; SPLIT_STEP; FINAL_STEP] THEN
+  STRIP_TAC THEN
+  ASM_REWRITE_TAC[SPLIT_FACE_COUNT_VERTICES; MAKE_FACE_FINAL_CLAUSES; LE_ADD;
+                  LE_REFL]);;
+
+let STEP_FACE_LIST_LEN = prove
+ (`!g g'. STEP g g' /\ FACE_LIST_LEN g ==> FACE_LIST_LEN g'`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[STEP; SPLIT_STEP; FINAL_STEP; FACE_LIST_LEN] THEN
+  STRIP_TAC THEN
+  ASM_REWRITE_TAC[SPLIT_FACE_COUNT_VERTICES; SPLIT_FACE_LENGTH_FACE_LIST_AT;
+                  MAKE_FACE_FINAL_CLAUSES; LENGTH_MAP]);;
+
+let STEP_FINALS = prove
+ (`!g g'. STEP g g' ==> SUBMSET (FINALS g) (FINALS g')`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[STEP; SPLIT_STEP; FINAL_STEP] THEN
+  STRIP_TAC THEN
+  ASM_REWRITE_TAC[FINALS; SPLIT_FACE_FACES; MAKE_FACE_FINAL_CLAUSES] THENL
+   [REWRITE_TAC[FILTER_APPEND] THEN MATCH_MP_TAC SUBMSET_TRANS THEN
+    EXISTS_TAC
+     `FILTER FINAL_FACE
+        (REPLACE oldF [SND (SPLIT_FACE_PAIR oldF ram1 ram2 newVs)]
+                 (FACES g))` THEN
+    ASM_SIMP_TAC[SUBMSET_FILTER_REPLACE; SUBMSET_APPEND_R];
+    ASM_SIMP_TAC[SUBMSET_FILTER_REPLACE]]);;
+
+let STEP_FACES_AT_FINAL_VERTEX = prove
+ (`!g g' v. STEP g g' /\ FACE_LIST_LEN g /\ v < COUNT_VERTICES g /\
+            FINAL_VERTEX g v
+            ==> FACES_AT g' v = FACES_AT g v`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[STEP; SPLIT_STEP; FINAL_STEP; FACE_LIST_LEN; FINAL_VERTEX] THEN
+  DISCH_THEN(CONJUNCTS_THEN2 MP_TAC STRIP_ASSUME_TAC) THEN
+  SUBGOAL_THEN `!f. ~FINAL_FACE f ==> ~MEM f (FACES_AT g v)` ASSUME_TAC THENL
+   [ASM_MESON_TAC[ALL_MEM]; ALL_TAC] THEN
+  STRIP_TAC THEN ASM_REWRITE_TAC[] THENL
+   [MP_TAC(ISPECL [`\l m:face list. ~MEM (oldF:face) l ==> m = l`;
+                   `oldF:face`] SPLIT_FACE_FACES_AT_REL) THEN
+    REWRITE_TAC[] THEN ANTS_TAC THENL
+     [MESON_TAC[REPLACE_NOT_MEM]; ALL_TAC] THEN
+    DISCH_THEN(MP_TAC o SPECL
+     [`g:graph`; `ram1:num`; `ram2:num`; `newVs:num list`; `v:num`]) THEN
+    ASM_SIMP_TAC[];
+    ASM_SIMP_TAC[FACES_AT_MAKE_FACE_FINAL; REPLACE_NOT_MEM]]);;
+
+let STEP_FACES_AT_MONO = prove
+ (`!g g' v. STEP g g' /\ FACE_LIST_LEN g /\ v < COUNT_VERTICES g
+            ==> SUBMSET (FILTER FINAL_FACE (FACES_AT g v))
+                        (FILTER FINAL_FACE (FACES_AT g' v)) /\
+                LENGTH (FACES_AT g v) <= LENGTH (FACES_AT g' v)`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[STEP; SPLIT_STEP; FINAL_STEP; FACE_LIST_LEN] THEN
+  DISCH_THEN(CONJUNCTS_THEN2 MP_TAC STRIP_ASSUME_TAC) THEN
+  STRIP_TAC THEN ASM_REWRITE_TAC[] THENL
+   [MP_TAC(ISPECL
+     [`\l m:face list. SUBMSET (FILTER FINAL_FACE l) (FILTER FINAL_FACE m) /\
+                       LENGTH l <= LENGTH m`; `oldF:face`]
+      SPLIT_FACE_FACES_AT_REL) THEN
+    REWRITE_TAC[] THEN ANTS_TAC THENL
+     [ASM_MESON_TAC[SUBMSET_REFL; SUBMSET_TRANS; LE_REFL; LE_TRANS;
+                    SUBMSET_FILTER_REPLACE; LENGTH_REPLACE_LE];
+      ALL_TAC] THEN
+    DISCH_THEN(MP_TAC o SPECL
+     [`g:graph`; `ram1:num`; `ram2:num`; `newVs:num list`; `v:num`]) THEN
+    ASM_SIMP_TAC[];
+    ASM_SIMP_TAC[FACES_AT_MAKE_FACE_FINAL; SUBMSET_FILTER_REPLACE;
+                 LENGTH_REPLACE_LE; NOT_CONS_NIL]]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Lifted along RTC STEP, then along reachability.                           *)
+(* ------------------------------------------------------------------------- *)
+
+let RTC_STEP_INDUCT = prove
+ (`!P. (!g. P g g) /\
+       (!g g' g''. RTC STEP g g' /\ P g g' /\ STEP g' g'' ==> P g g'')
+       ==> !g g'. RTC STEP g g' ==> P g g'`,
+  GEN_TAC THEN STRIP_TAC THEN
+  SUBGOAL_THEN `!g g'. RTC STEP g g' ==> RTC STEP g g' /\ P g g'`
+   (fun th -> MESON_TAC[th]) THEN
+  MATCH_MP_TAC RTC_INDUCT_L THEN ASM_MESON_TAC[RTC_REFL; RTC_TRANS; RTC_INC]);;
+
+let RTC_STEP_COUNT_VERTICES = prove
+ (`!g g'. RTC STEP g g' ==> COUNT_VERTICES g <= COUNT_VERTICES g'`,
+  MATCH_MP_TAC RTC_INDUCT_L THEN
+  MESON_TAC[LE_REFL; LE_TRANS; STEP_COUNT_VERTICES]);;
+
+let RTC_STEP_FACE_LIST_LEN = prove
+ (`!g g'. RTC STEP g g' ==> FACE_LIST_LEN g ==> FACE_LIST_LEN g'`,
+  MATCH_MP_TAC RTC_INDUCT_L THEN MESON_TAC[STEP_FACE_LIST_LEN]);;
+
+let RTC_STEP_FINALS = prove
+ (`!g g'. RTC STEP g g' ==> SUBMSET (FINALS g) (FINALS g')`,
+  MATCH_MP_TAC RTC_INDUCT_L THEN
+  MESON_TAC[SUBMSET_REFL; SUBMSET_TRANS; STEP_FINALS]);;
+
+let RTC_STEP_FACES_AT_FINAL_VERTEX = prove
+ (`!g g'. RTC STEP g g'
+          ==> !v. FACE_LIST_LEN g /\ v < COUNT_VERTICES g /\ FINAL_VERTEX g v
+                  ==> FACES_AT g' v = FACES_AT g v`,
+  MATCH_MP_TAC RTC_STEP_INDUCT THEN CONJ_TAC THENL [MESON_TAC[]; ALL_TAC] THEN
+  REPEAT GEN_TAC THEN STRIP_TAC THEN X_GEN_TAC `v:num` THEN STRIP_TAC THEN
+  SUBGOAL_THEN `FACES_AT g' v = FACES_AT g v` ASSUME_TAC THENL
+   [ASM_SIMP_TAC[]; ALL_TAC] THEN
+  MP_TAC(SPECL [`g':graph`; `g'':graph`; `v:num`]
+    STEP_FACES_AT_FINAL_VERTEX) THEN
+  ASM_REWRITE_TAC[FINAL_VERTEX] THEN DISCH_THEN MATCH_MP_TAC THEN
+  ASM_MESON_TAC[RTC_STEP_FACE_LIST_LEN; RTC_STEP_COUNT_VERTICES; LTE_TRANS;
+                FINAL_VERTEX]);;
+
+let RTC_STEP_FACES_AT_MONO = prove
+ (`!g g'. RTC STEP g g'
+          ==> !v. FACE_LIST_LEN g /\ v < COUNT_VERTICES g
+                  ==> SUBMSET (FILTER FINAL_FACE (FACES_AT g v))
+                              (FILTER FINAL_FACE (FACES_AT g' v)) /\
+                      LENGTH (FACES_AT g v) <= LENGTH (FACES_AT g' v)`,
+  MATCH_MP_TAC RTC_STEP_INDUCT THEN CONJ_TAC THENL
+   [REWRITE_TAC[SUBMSET_REFL; LE_REFL]; ALL_TAC] THEN
+  REPEAT GEN_TAC THEN STRIP_TAC THEN X_GEN_TAC `v:num` THEN STRIP_TAC THEN
+  MP_TAC(SPECL [`g':graph`; `g'':graph`; `v:num`] STEP_FACES_AT_MONO) THEN
+  ANTS_TAC THENL
+   [ASM_MESON_TAC[RTC_STEP_FACE_LIST_LEN; RTC_STEP_COUNT_VERTICES; LTE_TRANS];
+    FIRST_X_ASSUM(MP_TAC o SPEC `v:num`) THEN ASM_REWRITE_TAC[] THEN
+    MESON_TAC[SUBMSET_TRANS; LE_TRANS]]);;
+
+let REACH_COUNT_VERTICES = prove
+ (`!p g g'. REACH p g g' ==> COUNT_VERTICES g <= COUNT_VERTICES g'`,
+  MESON_TAC[REACH_RTC_STEP; RTC_STEP_COUNT_VERTICES]);;
+
+let REACH_FACE_LIST_LEN = prove
+ (`!p g g'. REACH p g g' /\ FACE_LIST_LEN g ==> FACE_LIST_LEN g'`,
+  MESON_TAC[REACH_RTC_STEP; RTC_STEP_FACE_LIST_LEN]);;
+
+let REACH_FINALS = prove
+ (`!p g g'. REACH p g g' ==> SUBMSET (FINALS g) (FINALS g')`,
+  MESON_TAC[REACH_RTC_STEP; RTC_STEP_FINALS]);;
+
+let REACH_FACES_AT_FINAL_VERTEX = prove
+ (`!p g g' v. REACH p g g' /\ FACE_LIST_LEN g /\ v < COUNT_VERTICES g /\
+              FINAL_VERTEX g v
+              ==> FACES_AT g' v = FACES_AT g v`,
+  MESON_TAC[REACH_RTC_STEP; RTC_STEP_FACES_AT_FINAL_VERTEX]);;
+
+let EXCEPT_FILTER_FINALS = prove
+ (`!g v. EXCEPT g v =
+         LENGTH (FILTER (\f. 5 <= LENGTH (VERTICES f))
+                        (FILTER FINAL_FACE (FACES_AT g v)))`,
+  REWRITE_TAC[EXCEPT; FILTER_FILTER]);;
+
+let REACH_DEGREE_EXCEPT = prove
+ (`!p g g' v. REACH p g g' /\ FACE_LIST_LEN g /\ v < COUNT_VERTICES g
+              ==> DEGREE g v <= DEGREE g' v /\ EXCEPT g v <= EXCEPT g' v`,
+  REPEAT GEN_TAC THEN
+  DISCH_THEN(CONJUNCTS_THEN2 (MP_TAC o MATCH_MP REACH_RTC_STEP)
+                             STRIP_ASSUME_TAC) THEN
+  DISCH_THEN(MP_TAC o SPEC `v:num` o MATCH_MP RTC_STEP_FACES_AT_MONO) THEN
+  ASM_REWRITE_TAC[DEGREE; EXCEPT_FILTER_FINALS] THEN
+  MESON_TAC[LENGTH_FILTER_SUBMSET]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The pruning lemmas of tame_sound.ml follow.                               *)
+(* ------------------------------------------------------------------------- *)
+
+let FACE_LIST_LEN_NEXT_PLANE_PROVED = prove
+ (`!p g g'. FACE_LIST_LEN g /\ MEM g' (NEXT_PLANE p g) ==> FACE_LIST_LEN g'`,
+  MESON_TAC[REACH_FACE_LIST_LEN; REACH_CASES; REACH_REFL]);;
+
+let TFO_VCOUNT_PROVED = prove
+ (`!arch p g. 15 < COUNT_VERTICES g ==> TFO arch p g`,
+  REPEAT STRIP_TAC THEN REWRITE_TAC[TFO] THEN REPEAT STRIP_TAC THEN
+  FIRST_X_ASSUM(MP_TAC o MATCH_MP REACH_COUNT_VERTICES) THEN
+  FIRST_X_ASSUM(MP_TAC o CONJUNCT1 o CONJUNCT2 o REWRITE_RULE[TAME]) THEN
+  REWRITE_TAC[TAME10_EXEC] THEN ASM_ARITH_TAC);;
+
+let TFO_DEGREE_PROVED = prove
+ (`!arch p g v. FACE_LIST_LEN g /\ DEGREE_PRUNED g v ==> TFO arch p g`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[DEGREE_PRUNED] THEN STRIP_TAC THEN
+  REWRITE_TAC[TFO] THEN X_GEN_TAC `g':graph` THEN STRIP_TAC THEN
+  MP_TAC(SPECL [`p:num`; `g:graph`; `g':graph`; `v:num`]
+    REACH_DEGREE_EXCEPT) THEN
+  ASM_REWRITE_TAC[] THEN
+  MP_TAC(SPECL [`p:num`; `g:graph`; `g':graph`] REACH_COUNT_VERTICES) THEN
+  ASM_REWRITE_TAC[] THEN
+  FIRST_X_ASSUM(MP_TAC o CONJUNCT1 o CONJUNCT2 o CONJUNCT2 o CONJUNCT2 o
+    REWRITE_RULE[TAME]) THEN
+  REWRITE_TAC[TAME11B] THEN DISCH_THEN(MP_TAC o SPEC `v:num`) THEN
+  REWRITE_TAC[MEM_VERTICES_GRAPH] THEN
+  REPEAT(COND_CASES_TAC THEN ASM_REWRITE_TAC[]) THEN
+  REPEAT STRIP_TAC THEN ASM_ARITH_TAC);;
+end;;

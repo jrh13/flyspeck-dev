@@ -1,0 +1,440 @@
+(* ========================================================================= *)
+(* tame/tame_list.ml                                                         *)
+(*                                                                           *)
+(* List helpers of the tame-graph enumeration (Isabelle ListAux.thy and the  *)
+(* HOL List.thy functions it uses that have no HOL Light core counterpart):  *)
+(* UPT, FLAT, LIST_SUM, ROTATE, REPLACE, LIST_UPDATE, MAP_AT, SPLIT_AT,      *)
+(* BETWEEN, MINIMAL_EL, NEXT_ELEM, HIDE_DUPS.  Each definition comes with a *)
+(* clausal rewrite form.  Core functions are used where they exist: EL for   *)
+(* nth, LENGTH, FILTER, MAP, REVERSE for rev, APPEND, REPLICATE, HD, TL,     *)
+(* LAST, ITER (Library/iter.ml) for funpow, set_of_list for set.             *)
+(* ========================================================================= *)
+
+needs "Library/iter.ml";;
+
+module Tg_list = struct
+
+
+(* ------------------------------------------------------------------------- *)
+(* [i..<j] as UPT i j, defined by recursion on the length j - i.             *)
+(* ------------------------------------------------------------------------- *)
+
+let UPT_REC = define
+ `UPT_REC 0 i = [] /\
+  UPT_REC (SUC n) i = CONS i (UPT_REC n (SUC i))`;;
+
+let UPT = new_definition
+ `UPT i j = UPT_REC (j - i) i`;;
+
+let UPT_CLAUSES = prove
+ (`!i j. UPT i j = if i < j then CONS i (UPT (SUC i) j) else []`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[UPT] THEN COND_CASES_TAC THENL
+   [SUBGOAL_THEN `j - i = SUC(j - SUC i)` SUBST1_TAC THENL
+     [ASM_ARITH_TAC; REWRITE_TAC[UPT_REC]];
+    SUBGOAL_THEN `j - i = 0` SUBST1_TAC THENL
+     [ASM_ARITH_TAC; REWRITE_TAC[UPT_REC]]]);;
+
+let LENGTH_UPT_REC = prove
+ (`!n i. LENGTH(UPT_REC n i) = n`,
+  INDUCT_TAC THEN ASM_REWRITE_TAC[UPT_REC; LENGTH]);;
+
+let LENGTH_UPT = prove
+ (`!i j. LENGTH(UPT i j) = j - i`,
+  REWRITE_TAC[UPT; LENGTH_UPT_REC]);;
+
+let MEM_UPT_REC = prove
+ (`!n i k. MEM k (UPT_REC n i) <=> i <= k /\ k < i + n`,
+  INDUCT_TAC THEN ASM_REWRITE_TAC[UPT_REC; MEM] THEN ARITH_TAC);;
+
+let MEM_UPT = prove
+ (`!i j k. MEM k (UPT i j) <=> i <= k /\ k < j`,
+  REWRITE_TAC[UPT; MEM_UPT_REC] THEN ARITH_TAC);;
+
+let EL_UPT_REC = prove
+ (`!n i k. k < n ==> EL k (UPT_REC n i) = i + k`,
+  INDUCT_TAC THEN REWRITE_TAC[LT] THEN GEN_TAC THEN INDUCT_TAC THEN
+  REWRITE_TAC[UPT_REC; EL; HD; TL; ADD_CLAUSES] THEN
+  DISCH_TAC THEN FIRST_X_ASSUM(MP_TAC o SPECL [`SUC i`; `k:num`]) THEN
+  ANTS_TAC THENL [ASM_ARITH_TAC; REWRITE_TAC[ADD_CLAUSES]]);;
+
+let EL_UPT = prove
+ (`!i j k. k < j - i ==> EL k (UPT i j) = i + k`,
+  REWRITE_TAC[UPT; EL_UPT_REC]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Concatenation of a list of lists.                                         *)
+(* ------------------------------------------------------------------------- *)
+
+let FLAT = define
+ `FLAT [] = [] /\
+  FLAT (CONS (h:A list) t) = APPEND h (FLAT t)`;;
+
+let MEM_FLAT = prove
+ (`!x:A l. MEM x (FLAT l) <=> ?h. MEM h l /\ MEM x h`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[FLAT; MEM; MEM_APPEND] THEN MESON_TAC[]);;
+
+let FLAT_APPEND = prove
+ (`!l m:(A list)list. FLAT(APPEND l m) = APPEND (FLAT l) (FLAT m)`,
+  LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[FLAT; APPEND; APPEND_ASSOC]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Sum of a function over a list (Isabelle ListSum).                         *)
+(* ------------------------------------------------------------------------- *)
+
+let LIST_SUM = define
+ `LIST_SUM (f:A->num) [] = 0 /\
+  LIST_SUM f (CONS h t) = f h + LIST_SUM f t`;;
+
+let LIST_SUM_APPEND = prove
+ (`!f:A->num l m. LIST_SUM f (APPEND l m) = LIST_SUM f l + LIST_SUM f m`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[LIST_SUM; APPEND; ADD_CLAUSES; ADD_AC]);;
+
+let LIST_SUM_LE = prove
+ (`!f g:A->num l. (!x. MEM x l ==> f x <= g x)
+                  ==> LIST_SUM f l <= LIST_SUM g l`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[LIST_SUM; MEM; LE_REFL] THEN
+  REPEAT STRIP_TAC THEN MATCH_MP_TAC LE_ADD2 THEN ASM_SIMP_TAC[]);;
+
+let LIST_SUM_EQ = prove
+ (`!f g:A->num l. (!x. MEM x l ==> f x = g x)
+                  ==> LIST_SUM f l = LIST_SUM g l`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[LIST_SUM; MEM] THEN REPEAT STRIP_TAC THEN ASM_SIMP_TAC[]);;
+
+let LIST_SUM_MAP = prove
+ (`!f:B->num g:A->B l. LIST_SUM f (MAP g l) = LIST_SUM (f o g) l`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[LIST_SUM; MAP; o_THM]);;
+
+let LIST_SUM_FILTER_SPLIT = prove
+ (`!f:A->num p l.
+      LIST_SUM f l =
+      LIST_SUM f (FILTER p l) + LIST_SUM f (FILTER (\x. ~p x) l)`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[LIST_SUM; FILTER; ADD_CLAUSES] THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[LIST_SUM] THEN ARITH_TAC);;
+
+let LIST_SUM_ADD = prove
+ (`!f g:A->num l. LIST_SUM (\x. f x + g x) l = LIST_SUM f l + LIST_SUM g l`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[LIST_SUM] THEN ARITH_TAC);;
+
+let LIST_SUM_CONST = prove
+ (`!c l:A list. LIST_SUM (\x. c) l = c * LENGTH l`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[LIST_SUM; LENGTH; MULT_CLAUSES] THEN ARITH_TAC);;
+
+let LIST_SUM_0 = prove
+ (`!l:A list. LIST_SUM (\x. 0) l = 0`,
+  LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[LIST_SUM; ADD_CLAUSES]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Rotation of lists.                                                        *)
+(* ------------------------------------------------------------------------- *)
+
+let ROTATE1 = define
+ `ROTATE1 [] = [] /\
+  ROTATE1 (CONS (x:A) xs) = APPEND xs [x]`;;
+
+let ROTATE = new_definition
+ `ROTATE n (xs:A list) = ITER n ROTATE1 xs`;;
+
+let ROTATE_CLAUSES = prove
+ (`(!xs:A list. ROTATE 0 xs = xs) /\
+   (!n xs:A list. ROTATE (SUC n) xs = ROTATE n (ROTATE1 xs))`,
+  REWRITE_TAC[ROTATE; ITER; ITER_ALT]);;
+
+let LENGTH_ROTATE1 = prove
+ (`!xs:A list. LENGTH(ROTATE1 xs) = LENGTH xs`,
+  LIST_INDUCT_TAC THEN
+  REWRITE_TAC[ROTATE1; LENGTH; LENGTH_APPEND] THEN ARITH_TAC);;
+
+let LENGTH_ROTATE = prove
+ (`!n xs:A list. LENGTH(ROTATE n xs) = LENGTH xs`,
+  INDUCT_TAC THEN ASM_REWRITE_TAC[ROTATE_CLAUSES; LENGTH_ROTATE1]);;
+
+let MEM_ROTATE1 = prove
+ (`!x:A xs. MEM x (ROTATE1 xs) <=> MEM x xs`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[ROTATE1; MEM; MEM_APPEND] THEN MESON_TAC[]);;
+
+let MEM_ROTATE = prove
+ (`!n x:A xs. MEM x (ROTATE n xs) <=> MEM x xs`,
+  INDUCT_TAC THEN ASM_REWRITE_TAC[ROTATE_CLAUSES; MEM_ROTATE1]);;
+
+let ROTATE1_EQ_NIL = prove
+ (`!xs:A list. ROTATE1 xs = [] <=> xs = []`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[ROTATE1; NOT_CONS_NIL; APPEND_EQ_NIL]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Replacing the first occurrence of x by the list ys.                       *)
+(* ------------------------------------------------------------------------- *)
+
+let REPLACE = define
+ `REPLACE (x:A) ys [] = [] /\
+  REPLACE x ys (CONS z zs) =
+    if z = x then APPEND ys zs else CONS z (REPLACE x ys zs)`;;
+
+let LENGTH_REPLACE = prove
+ (`!x:A ys zs. MEM x zs
+               ==> LENGTH(REPLACE x ys zs) + 1 = LENGTH ys + LENGTH zs`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[REPLACE; MEM; LENGTH] THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[LENGTH_APPEND; LENGTH] THENL
+   [ARITH_TAC;
+    ASM_MESON_TAC[ARITH_RULE `a + 1 = b + c ==> SUC a + 1 = b + SUC c`]]);;
+
+let REPLACE_NOT_MEM = prove
+ (`!x:A ys zs. ~(MEM x zs) ==> REPLACE x ys zs = zs`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[REPLACE; MEM; DE_MORGAN_THM] THEN
+  REPEAT STRIP_TAC THEN ASM_SIMP_TAC[] THEN
+  COND_CASES_TAC THEN ASM_MESON_TAC[]);;
+
+let MEM_REPLACE = prove
+ (`!x:A ys zs w. MEM w (REPLACE x ys zs)
+                 ==> MEM w zs \/ MEM x zs /\ MEM w ys`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[REPLACE; MEM] THEN GEN_TAC THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[MEM; MEM_APPEND] THEN
+  ASM_MESON_TAC[]);;
+
+let MEM_REPLACE_OTHER = prove
+ (`!x:A ys zs w. MEM w zs /\ ~(w = x) ==> MEM w (REPLACE x ys zs)`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[REPLACE; MEM] THEN GEN_TAC THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[MEM; MEM_APPEND] THEN
+  ASM_MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* List update xs[i := y] and mapping at a list of positions.                *)
+(* ------------------------------------------------------------------------- *)
+
+let LIST_UPDATE = define
+ `LIST_UPDATE [] i (y:A) = [] /\
+  LIST_UPDATE (CONS x xs) i y =
+    if i = 0 then CONS y xs else CONS x (LIST_UPDATE xs (i - 1) y)`;;
+
+let LENGTH_LIST_UPDATE = prove
+ (`!xs i y:A. LENGTH(LIST_UPDATE xs i y) = LENGTH xs`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[LIST_UPDATE; LENGTH] THEN
+  REPEAT GEN_TAC THEN COND_CASES_TAC THEN ASM_REWRITE_TAC[LENGTH]);;
+
+let EL_LIST_UPDATE = prove
+ (`!xs i j y:A. j < LENGTH xs
+                ==> EL j (LIST_UPDATE xs i y) = if i = j then y else EL j xs`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[LENGTH; LT] THEN
+  GEN_TAC THEN INDUCT_TAC THEN REWRITE_TAC[LIST_UPDATE] THEN
+  ASM_CASES_TAC `i = 0` THEN
+  ASM_REWRITE_TAC[EL; HD; TL; NOT_SUC; GSYM NOT_SUC] THEN
+  GEN_TAC THEN DISCH_TAC THEN
+  FIRST_X_ASSUM(MP_TAC o SPECL [`i - 1`; `j:num`; `y:A`]) THEN
+  ANTS_TAC THENL [ASM_ARITH_TAC; ALL_TAC] THEN
+  DISCH_THEN SUBST1_TAC THEN
+  SUBGOAL_THEN `i - 1 = j <=> i = SUC j` SUBST1_TAC THENL
+   [ASM_ARITH_TAC; REFL_TAC]);;
+
+let MAP_AT = define
+ `MAP_AT [] (f:A->A) xs = xs /\
+  MAP_AT (CONS n ns) f xs =
+    if n < LENGTH xs then MAP_AT ns f (LIST_UPDATE xs n (f (EL n xs)))
+    else MAP_AT ns f xs`;;
+
+let LENGTH_MAP_AT = prove
+ (`!ns f:A->A xs. LENGTH(MAP_AT ns f xs) = LENGTH xs`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[MAP_AT] THEN REPEAT GEN_TAC THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[LENGTH_LIST_UPDATE]);;
+
+let EL_MAP_AT = prove
+ (`!ns f:A->A xs j. j < LENGTH xs /\ ~(MEM j ns)
+                    ==> EL j (MAP_AT ns f xs) = EL j xs`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[MAP_AT; MEM; DE_MORGAN_THM] THEN
+  REPEAT GEN_TAC THEN STRIP_TAC THEN COND_CASES_TAC THENL
+   [FIRST_X_ASSUM(MP_TAC o SPECL
+     [`f:A->A`; `LIST_UPDATE xs h (f (EL h xs)):A list`; `j:num`]) THEN
+    ASM_SIMP_TAC[LENGTH_LIST_UPDATE; EL_LIST_UPDATE];
+    FIRST_X_ASSUM(MP_TAC o SPECL [`f:A->A`; `xs:A list`; `j:num`]) THEN
+    ASM_REWRITE_TAC[]]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Splitting a list at the first occurrence of an element; the elements      *)
+(* strictly between two elements of a cyclic list.                           *)
+(* ------------------------------------------------------------------------- *)
+
+let SPLIT_AT_REC = define
+ `SPLIT_AT_REC (c:A) bs [] = (bs,[]) /\
+  SPLIT_AT_REC c bs (CONS a rs) =
+    if a = c then (bs,rs) else SPLIT_AT_REC c (APPEND bs [a]) rs`;;
+
+let SPLIT_AT = new_definition
+ `SPLIT_AT (c:A) xs = SPLIT_AT_REC c [] xs`;;
+
+let BETWEEN = new_definition
+ `BETWEEN (vs:A list) ram1 ram2 =
+    let pre1,post1 = SPLIT_AT ram1 vs in
+    if MEM ram2 post1 then
+      let pre2,post2 = SPLIT_AT ram2 post1 in pre2
+    else
+      let pre2,post2 = SPLIT_AT ram2 pre1 in APPEND post1 pre2`;;
+
+(* ------------------------------------------------------------------------- *)
+(* First element minimising a measure (Isabelle minimal).                    *)
+(* ------------------------------------------------------------------------- *)
+
+let MINIMAL_EL = define
+ `MINIMAL_EL (m:A->num) (CONS x xs) =
+    if xs = [] then x
+    else let mxs = MINIMAL_EL m xs in
+         if m x <= m mxs then x else mxs`;;
+
+let MEM_MINIMAL_EL = prove
+ (`!m:A->num xs. ~(xs = []) ==> MEM (MINIMAL_EL m xs) xs`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN REWRITE_TAC[NOT_CONS_NIL] THEN
+  ONCE_REWRITE_TAC[MINIMAL_EL] THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[MEM; LET_DEF; LET_END_DEF] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[]);;
+
+let MINIMAL_EL_MIN = prove
+ (`!m:A->num xs x. MEM x xs ==> m (MINIMAL_EL m xs) <= m x`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN REWRITE_TAC[MEM] THEN
+  ONCE_REWRITE_TAC[MINIMAL_EL] THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[MEM; LET_DEF; LET_END_DEF] THENL
+   [MESON_TAC[LE_REFL]; ALL_TAC] THEN
+  GEN_TAC THEN COND_CASES_TAC THEN ASM_REWRITE_TAC[] THEN
+  STRIP_TAC THEN ASM_SIMP_TAC[LE_REFL] THEN
+  ASM_MESON_TAC[LE_TRANS; NOT_LE; LT_IMP_LE]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The successor of x in the cyclic list as, with default b.                 *)
+(* ------------------------------------------------------------------------- *)
+
+let NEXT_ELEM = define
+ `NEXT_ELEM [] (b:A) x = b /\
+  NEXT_ELEM [a] b x = b /\
+  NEXT_ELEM (CONS a (CONS a' rs)) b x =
+    if x = a then a' else NEXT_ELEM (CONS a' rs) b x`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Hiding consecutive duplicates (Isabelle Enumerator.thy).                  *)
+(* ------------------------------------------------------------------------- *)
+
+let HIDE_DUPS_REC = define
+ `HIDE_DUPS_REC (a:A) [] = [] /\
+  HIDE_DUPS_REC a (CONS b bs) =
+    if a = b then CONS NONE (HIDE_DUPS_REC b bs)
+    else CONS (SOME b) (HIDE_DUPS_REC b bs)`;;
+
+let HIDE_DUPS = define
+ `HIDE_DUPS [] = [] /\
+  HIDE_DUPS (CONS (b:A) bs) = CONS (SOME b) (HIDE_DUPS_REC b bs)`;;
+
+let LENGTH_HIDE_DUPS_REC = prove
+ (`!bs a:A. LENGTH(HIDE_DUPS_REC a bs) = LENGTH bs`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[HIDE_DUPS_REC; LENGTH] THEN
+  GEN_TAC THEN COND_CASES_TAC THEN ASM_REWRITE_TAC[LENGTH]);;
+
+let LENGTH_HIDE_DUPS = prove
+ (`!bs:A list. LENGTH(HIDE_DUPS bs) = LENGTH bs`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[HIDE_DUPS; LENGTH; LENGTH_HIDE_DUPS_REC]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The value of an option (Isabelle the).                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let THE = define
+ `THE (SOME (x:A)) = x`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Distinctness of a list (Isabelle distinct).                               *)
+(* ------------------------------------------------------------------------- *)
+
+let DISTINCT = define
+ `DISTINCT [] = T /\
+  DISTINCT (CONS (x:A) xs) = (~(MEM x xs) /\ DISTINCT xs)`;;
+
+let DISTINCT_APPEND = prove
+ (`!l m:A list. DISTINCT(APPEND l m) <=>
+                DISTINCT l /\ DISTINCT m /\ !x. MEM x l ==> ~(MEM x m)`,
+  LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[DISTINCT; APPEND; MEM; MEM_APPEND] THEN
+  MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* A list is a sub-multiset of another: every element occurs at most as      *)
+(* often (Isabelle mset l <= mset m); used for the persistence of finals.    *)
+(* ------------------------------------------------------------------------- *)
+
+let COUNT = define
+ `COUNT (x:A) [] = 0 /\
+  COUNT x (CONS h t) = if h = x then SUC(COUNT x t) else COUNT x t`;;
+
+let COUNT_APPEND = prove
+ (`!x:A l m. COUNT x (APPEND l m) = COUNT x l + COUNT x m`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[COUNT; APPEND; ADD_CLAUSES] THEN
+  GEN_TAC THEN COND_CASES_TAC THEN ASM_REWRITE_TAC[ADD_CLAUSES]);;
+
+let COUNT_EQ_0 = prove
+ (`!x:A l. COUNT x l = 0 <=> ~(MEM x l)`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN REWRITE_TAC[COUNT; MEM] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[NOT_SUC] THEN ASM_MESON_TAC[]);;
+
+let MEM_COUNT = prove
+ (`!x:A l. MEM x l <=> 0 < COUNT x l`,
+  REWRITE_TAC[LT_NZ; COUNT_EQ_0]);;
+
+let MEM_SPLIT = prove
+ (`!x:A l. MEM x l ==> ?l1 l2. l = APPEND l1 (CONS x l2)`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN REWRITE_TAC[MEM] THEN STRIP_TAC THENL
+   [MAP_EVERY EXISTS_TAC [`[]:A list`; `t:A list`] THEN
+    ASM_REWRITE_TAC[APPEND];
+    FIRST_X_ASSUM(MP_TAC o C MATCH_MP (ASSUME `MEM (x:A) t`)) THEN
+    DISCH_THEN(X_CHOOSE_THEN `l1:A list`
+     (X_CHOOSE_THEN `l2:A list` SUBST1_TAC)) THEN
+    MAP_EVERY EXISTS_TAC [`CONS (h:A) l1`; `l2:A list`] THEN
+    REWRITE_TAC[APPEND]]);;
+
+let SUBMSET = new_definition
+ `SUBMSET (l:A list) m <=> !x. COUNT x l <= COUNT x m`;;
+
+let SUBMSET_REFL = prove
+ (`!l:A list. SUBMSET l l`,
+  REWRITE_TAC[SUBMSET; LE_REFL]);;
+
+let SUBMSET_TRANS = prove
+ (`!l m n:A list. SUBMSET l m /\ SUBMSET m n ==> SUBMSET l n`,
+  REWRITE_TAC[SUBMSET] THEN MESON_TAC[LE_TRANS]);;
+
+let SUBMSET_MEM = prove
+ (`!l m:A list x. SUBMSET l m /\ MEM x l ==> MEM x m`,
+  REWRITE_TAC[SUBMSET; MEM_COUNT] THEN REPEAT STRIP_TAC THEN
+  FIRST_X_ASSUM(MP_TAC o SPEC `x:A`) THEN ASM_ARITH_TAC);;
+
+let SUBMSET_APPEND_R = prove
+ (`!l m:A list. SUBMSET l (APPEND l m)`,
+  REWRITE_TAC[SUBMSET; COUNT_APPEND; LE_ADD]);;
+
+let SUBMSET_APPEND_L = prove
+ (`!l m:A list. SUBMSET m (APPEND l m)`,
+  REWRITE_TAC[SUBMSET; COUNT_APPEND; LE_ADDR]);;
+
+let LIST_SUM_SUBMSET = prove
+ (`!f:A->num l m. SUBMSET l m ==> LIST_SUM f l <= LIST_SUM f m`,
+  GEN_TAC THEN LIST_INDUCT_TAC THENL
+   [REWRITE_TAC[LIST_SUM; LE_0]; ALL_TAC] THEN
+  REWRITE_TAC[LIST_SUM; SUBMSET; COUNT] THEN REPEAT STRIP_TAC THEN
+  SUBGOAL_THEN `MEM (h:A) m` MP_TAC THENL
+   [FIRST_X_ASSUM(MP_TAC o SPEC `h:A`) THEN REWRITE_TAC[MEM_COUNT] THEN
+    ARITH_TAC;
+    ALL_TAC] THEN
+  DISCH_THEN(X_CHOOSE_THEN `m1:A list` (X_CHOOSE_THEN `m2:A list`
+    SUBST_ALL_TAC) o MATCH_MP MEM_SPLIT) THEN
+  FIRST_X_ASSUM(MP_TAC o SPEC `APPEND m1 m2:A list`) THEN ANTS_TAC THENL
+   [REWRITE_TAC[SUBMSET] THEN X_GEN_TAC `x:A` THEN
+    FIRST_X_ASSUM(MP_TAC o SPEC `x:A`) THEN
+    REWRITE_TAC[COUNT_APPEND; COUNT] THEN
+    COND_CASES_TAC THEN ASM_REWRITE_TAC[] THEN ARITH_TAC;
+    REWRITE_TAC[LIST_SUM_APPEND; LIST_SUM] THEN ARITH_TAC]);;
+end;;

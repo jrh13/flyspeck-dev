@@ -1,0 +1,681 @@
+(* ========================================================================= *)
+(* tame/tame_enum_props.ml -- what the enumerator guarantees about a vertex  *)
+(* option list vl of GENERATE_POLYGON i v f g: the chosen vertices SOMES vl *)
+(* start with v, are distinct vertices of f in the cyclic order of f, end   *)
+(* with the predecessor of v, a list with only two chosen vertices contains  *)
+(* a new vertex, and two consecutive chosen vertices without a new vertex   *)
+(* between them are adjacent on f or not joined by an edge of g (the        *)
+(* duplicate-edge filter).  Proved version (agent enum): the statements of  *)
+(* the skeleton are kept exactly.                                           *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_inv.hl";;
+flyspeck_needs "graph/tg_newverts.hl";;
+flyspeck_needs "graph/tg_arcs.hl";;
+flyspeck_needs "graph/tg_wf_inv.hl";;
+flyspeck_needs "graph/tg_isothm.hl";;
+flyspeck_needs "graph/tg_archive.hl";;
+
+module Tg_enum_props = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+open Tg_arcs;;
+open Tg_split_inv;;
+
+(* l1 is a subsequence of l2 *)
+
+let SUBSEQ = define
+ `SUBSEQ [] (l:A list) = T /\
+  SUBSEQ (CONS x xs) [] = F /\
+  SUBSEQ (CONS x xs) (CONS y ys) =
+    (if x = y then SUBSEQ xs ys else SUBSEQ (CONS x xs) ys)`;;
+
+(* consecutive chosen vertices with no NONE between them *)
+
+let ADJ_SOMES = define
+ `ADJ_SOMES [] = [] /\
+  ADJ_SOMES (CONS NONE vos) = ADJ_SOMES vos /\
+  ADJ_SOMES (CONS (SOME (a:num)) vos) =
+    (if NULL vos then []
+     else if HD vos = NONE then ADJ_SOMES vos
+     else CONS (a, THE (HD vos)) (ADJ_SOMES vos))`;;
+
+let CHOSEN_OK = new_definition
+ `CHOSEN_OK g f v vl <=>
+    ?k ws. ROTATE k (VERTICES f) = CONS v ws /\
+           SUBSEQ (SOMES vl) (CONS v ws) /\
+           HD (SOMES vl) = v /\ LAST (SOMES vl) = LAST (CONS v ws) /\
+           (LENGTH (SOMES vl) = 2 ==> MEM NONE vl) /\
+           ALL (\p. SND p = NEXT_VERTEX f (FST p) \/
+                    ~MEM (SND p) (NEIGHBORS g (FST p)))
+               (ADJ_SOMES vl)`;;
+
+let ROTATE_TO_HD = prove
+ (`!vs (v:A). MEM v vs ==> ?k ws. ROTATE k vs = CONS v ws`,
+  REPEAT STRIP_TAC THEN FIRST_X_ASSUM(MP_TAC o MATCH_MP MEM_SPLIT) THEN
+  DISCH_THEN(X_CHOOSE_THEN `l1:A list`
+    (X_CHOOSE_THEN `l2:A list` SUBST1_TAC)) THEN
+  EXISTS_TAC `LENGTH(l1:A list)` THEN
+  REWRITE_TAC[ROTATE_APPEND_LENGTH; APPEND] THEN MESON_TAC[]);;
+
+let DISTINCT_ROTATE1 = prove
+ (`!xs:A list. DISTINCT(ROTATE1 xs) <=> DISTINCT xs`,
+  LIST_INDUCT_TAC THEN
+  REWRITE_TAC[ROTATE1; DISTINCT; DISTINCT_APPEND; MEM] THEN MESON_TAC[]);;
+
+let DISTINCT_ROTATE = prove
+ (`!n xs:A list. DISTINCT(ROTATE n xs) <=> DISTINCT xs`,
+  INDUCT_TAC THEN ASM_REWRITE_TAC[ROTATE_CLAUSES; DISTINCT_ROTATE1]);;
+
+let ROTATE_CONS_PROPS = prove
+ (`!vs k (v:A) ws.
+     DISTINCT vs /\ ROTATE k vs = CONS v ws
+     ==> DISTINCT (CONS v ws) /\ LENGTH (CONS v ws) = LENGTH vs /\
+         (!x. MEM x (CONS v ws) <=> MEM x vs)`,
+  REPEAT GEN_TAC THEN
+  DISCH_THEN(CONJUNCTS_THEN2 ASSUME_TAC (SUBST1_TAC o SYM)) THEN
+  ASM_REWRITE_TAC[DISTINCT_ROTATE; LENGTH_ROTATE; MEM_ROTATE]);;
+
+let NEXT_ELEM_EL_SUC = prove
+ (`!l:A list j b. DISTINCT l /\ SUC j < LENGTH l
+                  ==> NEXT_ELEM l b (EL j l) = EL (SUC j) l`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[LENGTH; CONJUNCT1 LT] THEN
+  POP_ASSUM MP_TAC THEN STRUCT_CASES_TAC(ISPEC `t:A list` list_CASES) THEN
+  REWRITE_TAC[LENGTH; LT_SUC; CONJUNCT1 LT] THEN DISCH_TAC THEN
+  INDUCT_TAC THEN REWRITE_TAC[EL; HD; TL; NEXT_ELEM; DISTINCT] THEN
+  REPEAT STRIP_TAC THEN COND_CASES_TAC THENL
+   [SUBGOAL_THEN `MEM (EL j (CONS (h':A) t')) (CONS h' t')` MP_TAC THENL
+     [MATCH_MP_TAC MEM_EL THEN REWRITE_TAC[LENGTH] THEN ASM_ARITH_TAC;
+      ASM_MESON_TAC[]];
+    FIRST_X_ASSUM(MP_TAC o SPECL [`j:num`; `b:A`]) THEN
+    ASM_REWRITE_TAC[DISTINCT; LENGTH; EL; TL] THEN
+    DISCH_THEN MATCH_MP_TAC THEN ASM_ARITH_TAC]);;
+
+let NEXT_ELEM_LAST_DISTINCT = prove
+ (`!l:A list b. DISTINCT l /\ ~(l = []) ==> NEXT_ELEM l b (LAST l) = b`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[NOT_CONS_NIL] THEN
+  POP_ASSUM MP_TAC THEN STRUCT_CASES_TAC(ISPEC `t:A list` list_CASES) THEN
+  REWRITE_TAC[NEXT_ELEM; LAST_CLAUSES; NOT_CONS_NIL; DISTINCT] THEN
+  DISCH_TAC THEN GEN_TAC THEN STRIP_TAC THEN COND_CASES_TAC THENL
+   [ASM_MESON_TAC[MEM_LAST_NONNIL; NOT_CONS_NIL];
+    FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[DISTINCT; NOT_CONS_NIL]]);;
+
+let NEXT_VERTEX_ROTATE = prove
+ (`!f k v ws x. DISTINCT (VERTICES f) /\ ROTATE k (VERTICES f) = CONS v ws /\
+                MEM x (VERTICES f)
+                ==> NEXT_VERTEX f x = NEXT_ELEM (CONS v ws) v x`,
+  REPEAT STRIP_TAC THEN REWRITE_TAC[NEXT_VERTEX; LET_DEF; LET_END_DEF] THEN
+  MP_TAC(ISPECL [`VERTICES f`; `k:num`; `x:num`] NEXT_ELEM_ROTATE) THEN
+  ASM_REWRITE_TAC[HD] THEN MESON_TAC[]);;
+
+let NEXT_VERTICES_SUC = prove
+ (`!f n v. NEXT_VERTICES f (SUC n) v = NEXT_VERTEX f (NEXT_VERTICES f n v)`,
+  REWRITE_TAC[NEXT_VERTICES; ITER]);;
+
+let NEXT_VERTICES_EL = prove
+ (`!f k v ws j. DISTINCT (VERTICES f) /\ ROTATE k (VERTICES f) = CONS v ws /\
+                j < LENGTH (VERTICES f)
+                ==> NEXT_VERTICES f j v = EL j (CONS v ws)`,
+  REPLICATE_TAC 4 GEN_TAC THEN INDUCT_TAC THENL
+   [REWRITE_TAC[NEXT_VERTICES_0; EL; HD]; ALL_TAC] THEN
+  STRIP_TAC THEN
+  FIRST_X_ASSUM(MP_TAC o check (is_imp o concl)) THEN ASM_REWRITE_TAC[] THEN
+  ANTS_TAC THENL [ASM_ARITH_TAC; DISCH_TAC] THEN
+  MP_TAC(ISPECL [`VERTICES f`; `k:num`; `v:num`; `ws:num list`]
+    ROTATE_CONS_PROPS) THEN
+  ASM_REWRITE_TAC[] THEN STRIP_TAC THEN
+  ASM_REWRITE_TAC[NEXT_VERTICES_SUC] THEN
+  MP_TAC(ISPECL [`f:face`; `k:num`; `v:num`; `ws:num list`;
+                 `EL j (CONS (v:num) ws)`] NEXT_VERTEX_ROTATE) THEN
+  ANTS_TAC THENL
+   [ASM_REWRITE_TAC[] THEN FIRST_X_ASSUM(fun th -> REWRITE_TAC[GSYM th]) THEN
+    MATCH_MP_TAC MEM_EL THEN ASM_ARITH_TAC;
+    DISCH_THEN SUBST1_TAC THEN MATCH_MP_TAC NEXT_ELEM_EL_SUC THEN
+    ASM_REWRITE_TAC[]]);;
+
+let NEXT_VERTICES_LENGTH = prove
+ (`!f v. DISTINCT (VERTICES f) /\ MEM v (VERTICES f)
+         ==> NEXT_VERTICES f (LENGTH (VERTICES f)) v = v`,
+  REPEAT STRIP_TAC THEN
+  MP_TAC(ISPECL [`VERTICES f`; `v:num`] ROTATE_TO_HD) THEN
+  ASM_REWRITE_TAC[] THEN
+  DISCH_THEN(X_CHOOSE_THEN `k:num` (X_CHOOSE_THEN `ws:num list`
+    ASSUME_TAC)) THEN
+  MP_TAC(ISPECL [`VERTICES f`; `k:num`; `v:num`; `ws:num list`]
+    ROTATE_CONS_PROPS) THEN
+  ASM_REWRITE_TAC[] THEN STRIP_TAC THEN
+  SUBGOAL_THEN `LENGTH (VERTICES f) = SUC (LENGTH (ws:num list))`
+  SUBST1_TAC THENL [ASM_MESON_TAC[LENGTH]; ALL_TAC] THEN
+  REWRITE_TAC[NEXT_VERTICES_SUC] THEN
+  MP_TAC(ISPECL [`f:face`; `k:num`; `v:num`; `ws:num list`;
+                 `LENGTH (ws:num list)`] NEXT_VERTICES_EL) THEN
+  ASM_REWRITE_TAC[] THEN ANTS_TAC THENL
+   [FIRST_X_ASSUM(SUBST1_TAC o SYM) THEN REWRITE_TAC[LENGTH] THEN ARITH_TAC;
+    DISCH_THEN SUBST1_TAC] THEN
+  SUBGOAL_THEN `EL (LENGTH ws) (CONS (v:num) ws) = LAST (CONS v ws)`
+  SUBST1_TAC THENL
+   [MP_TAC(ISPEC `CONS (v:num) ws` LAST_EL) THEN
+    REWRITE_TAC[NOT_CONS_NIL; LENGTH; SUC_SUB1] THEN MESON_TAC[];
+    ALL_TAC] THEN
+  MP_TAC(ISPECL [`f:face`; `k:num`; `v:num`; `ws:num list`;
+                 `LAST (CONS (v:num) ws)`] NEXT_VERTEX_ROTATE) THEN
+  ANTS_TAC THENL
+   [ASM_REWRITE_TAC[] THEN FIRST_X_ASSUM(fun th -> REWRITE_TAC[GSYM th]) THEN
+    MATCH_MP_TAC MEM_LAST_NONNIL THEN REWRITE_TAC[NOT_CONS_NIL];
+    DISCH_THEN SUBST1_TAC THEN MATCH_MP_TAC NEXT_ELEM_LAST_DISTINCT THEN
+    ASM_REWRITE_TAC[NOT_CONS_NIL]]);;
+
+let NEXT_VERTICES_INJ = prove
+ (`!f v i j. DISTINCT (VERTICES f) /\ MEM v (VERTICES f) /\
+             i < LENGTH (VERTICES f) /\ j < LENGTH (VERTICES f) /\
+             NEXT_VERTICES f i v = NEXT_VERTICES f j v
+             ==> i = j`,
+  REPEAT STRIP_TAC THEN
+  MP_TAC(ISPECL [`VERTICES f`; `v:num`] ROTATE_TO_HD) THEN
+  ASM_REWRITE_TAC[] THEN
+  DISCH_THEN(X_CHOOSE_THEN `k:num` (X_CHOOSE_THEN `ws:num list`
+    ASSUME_TAC)) THEN
+  MP_TAC(ISPECL [`VERTICES f`; `k:num`; `v:num`; `ws:num list`]
+    ROTATE_CONS_PROPS) THEN
+  ASM_REWRITE_TAC[] THEN STRIP_TAC THEN
+  MP_TAC(ISPECL [`CONS (v:num) ws`; `i:num`; `j:num`] DISTINCT_EL_INJ) THEN
+  ASM_MESON_TAC[NEXT_VERTICES_EL]);;
+
+let NEXT_VERTEX_OF_BETWEEN_NIL = prove
+ (`!f a b. DISTINCT (VERTICES f) /\ MEM a (VERTICES f) /\
+           MEM b (VERTICES f) /\ ~(a = b) /\ BETWEEN (VERTICES f) a b = []
+           ==> NEXT_VERTEX f a = b`,
+  REPEAT STRIP_TAC THEN
+  MP_TAC(ISPECL [`VERTICES f`; `a:num`; `b:num`] ARC_DECOMP) THEN
+  ASM_REWRITE_TAC[APPEND] THEN DISCH_THEN(X_CHOOSE_TAC `k:num`) THEN
+  MP_TAC(ISPECL [`f:face`; `k:num`; `a:num`;
+                 `CONS b (BETWEEN (VERTICES f) b a)`; `a:num`]
+    NEXT_VERTEX_ROTATE) THEN
+  ASM_REWRITE_TAC[NEXT_ELEM]);;
+
+let MAP_UPT_REC_SUC = prove
+ (`!n a (f:num->A). MAP f (UPT_REC n (SUC a)) = MAP (f o SUC) (UPT_REC n a)`,
+  INDUCT_TAC THEN ASM_REWRITE_TAC[UPT_REC; MAP; o_THM]);;
+
+let MAP_EL_UPT = prove
+ (`!l:A list. MAP (\j. EL j l) (UPT 0 (LENGTH l)) = l`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[LENGTH; UPT; SUB_0; UPT_REC; MAP] THEN
+  REWRITE_TAC[EL; HD; MAP_UPT_REC_SUC; o_DEF; TL] THEN
+  POP_ASSUM MP_TAC THEN REWRITE_TAC[UPT; SUB_0] THEN
+  DISCH_THEN(fun th -> REWRITE_TAC[th]));;
+
+let LAST_MAP_NONNIL = prove
+ (`!(f:A->B) l. ~(l = []) ==> LAST (MAP f l) = f (LAST l)`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN REWRITE_TAC[NOT_CONS_NIL; MAP; LAST] THEN
+  ASM_CASES_TAC `t:A list = []` THEN ASM_SIMP_TAC[MAP; MAP_EQ_NIL]);;
+
+let OPTION_LIST_CASES = prove
+ (`!l:(A option) list.
+     l = [] \/ (?t. l = CONS NONE t) \/ (?a t. l = CONS (SOME a) t)`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[NOT_CONS_NIL; CONS_11] THEN
+  MESON_TAC[cases "option"]);;
+
+let ADJ_SOMES_CLAUSES = prove
+ (`ADJ_SOMES [] = [] /\
+   (!vos. ADJ_SOMES (CONS NONE vos) = ADJ_SOMES vos) /\
+   (!a. ADJ_SOMES [SOME a] = []) /\
+   (!a vos. ADJ_SOMES (CONS (SOME a) (CONS NONE vos)) = ADJ_SOMES vos) /\
+   (!a b vos. ADJ_SOMES (CONS (SOME a) (CONS (SOME b) vos)) =
+              CONS (a,b) (ADJ_SOMES (CONS (SOME b) vos)))`,
+  REWRITE_TAC[ADJ_SOMES; NULL; HD; THE; option_DISTINCT; NOT_CONS_NIL]);;
+
+let ADJ_SOMES_HIDE_DUPS = prove
+ (`!x l. ADJ_SOMES (HIDE_DUPS (CONS x l)) =
+         APPEND (if ~(l = []) /\ ~(x = HD l) then [(x, HD l)] else [])
+                (ADJ_SOMES (HIDE_DUPS_REC x l))`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[HIDE_DUPS; HIDE_DUPS_REC; ADJ_SOMES_CLAUSES; APPEND;
+              NOT_CONS_NIL; HD] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[ADJ_SOMES_CLAUSES; APPEND]);;
+
+let SOMES_MAP_OPTION = prove
+ (`!omf (f:num->num).
+     omf NONE = NONE /\ (!x. omf (SOME x) = SOME (f x))
+     ==> !l. SOMES (MAP omf l) = MAP f (SOMES l)`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[MAP; SOMES] THEN
+  SPEC_TAC(`h:num option`,`ov:num option`) THEN
+  MATCH_MP_TAC option_INDUCT THEN ASM_REWRITE_TAC[SOMES; MAP]);;
+
+let MEM_NONE_MAP_OPTION = prove
+ (`!omf (f:num->num).
+     omf NONE = NONE /\ (!x. omf (SOME x) = SOME (f x))
+     ==> !l. MEM NONE (MAP omf l) <=> MEM NONE l`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[MAP; MEM] THEN
+  SPEC_TAC(`h:num option`,`ov:num option`) THEN
+  MATCH_MP_TAC option_INDUCT THEN
+  ASM_REWRITE_TAC[MEM; option_DISTINCT; GSYM option_DISTINCT]);;
+
+let ADJ_SOMES_MAP_OPTION = prove
+ (`!omf (f:num->num).
+     omf NONE = NONE /\ (!x. omf (SOME x) = SOME (f x))
+     ==> !l. ADJ_SOMES (MAP omf l) =
+             MAP (\p. f (FST p), f (SND p)) (ADJ_SOMES l)`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[MAP; ADJ_SOMES_CLAUSES] THEN POP_ASSUM MP_TAC THEN
+  SPEC_TAC(`h:num option`,`ov:num option`) THEN
+  MATCH_MP_TAC option_INDUCT THEN ASM_REWRITE_TAC[ADJ_SOMES_CLAUSES] THEN
+  X_GEN_TAC `a:num` THEN
+  STRUCT_CASES_TAC(ISPEC `t:(num option)list` OPTION_LIST_CASES) THEN
+  ASM_REWRITE_TAC[MAP; ADJ_SOMES_CLAUSES; FST; SND] THEN SIMP_TAC[]);;
+
+let HIDE_DUPS_REC_MAP = prove
+ (`!omf (f:num->num) P.
+     omf NONE = NONE /\ (!x. omf (SOME x) = SOME (f x)) /\
+     (!x y. P x /\ P y /\ f x = f y ==> x = y)
+     ==> !l x. P x /\ ALL P l
+               ==> HIDE_DUPS_REC (f x) (MAP f l) =
+                   MAP omf (HIDE_DUPS_REC x l)`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[MAP; HIDE_DUPS_REC; ALL] THEN REPEAT STRIP_TAC THEN
+  SUBGOAL_THEN `(f:num->num) x = f h <=> x = h` SUBST1_TAC THENL
+   [ASM_MESON_TAC[]; ALL_TAC] THEN
+  COND_CASES_TAC THEN ASM_SIMP_TAC[MAP]);;
+
+let HIDE_DUPS_MAP = prove
+ (`!omf (f:num->num) P.
+     omf NONE = NONE /\ (!x. omf (SOME x) = SOME (f x)) /\
+     (!x y. P x /\ P y /\ f x = f y ==> x = y)
+     ==> !l. ALL P l ==> HIDE_DUPS (MAP f l) = MAP omf (HIDE_DUPS l)`,
+  REPEAT GEN_TAC THEN DISCH_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[MAP; HIDE_DUPS; ALL] THEN STRIP_TAC THEN
+  FIRST_ASSUM(fun th -> ASM_SIMP_TAC[MAP; MATCH_MP HIDE_DUPS_REC_MAP th]));;
+
+let SUBSEQ_MEM = prove
+ (`!l2 l1:A list. SUBSEQ l1 l2 ==> !x. MEM x l1 ==> MEM x l2`,
+  LIST_INDUCT_TAC THEN LIST_INDUCT_TAC THEN REWRITE_TAC[SUBSEQ; MEM] THEN
+  POP_ASSUM(K ALL_TAC) THEN COND_CASES_TAC THEN ASM_MESON_TAC[MEM]);;
+
+let SUBSEQ_MAP_INJ = prove
+ (`!(f:A->B) P l2 l1.
+     (!x y. P x /\ P y /\ f x = f y ==> x = y) /\ ALL P l2 /\ SUBSEQ l1 l2
+     ==> SUBSEQ (MAP f l1) (MAP f l2)`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[SUBSEQ; MAP; ALL] THEN POP_ASSUM(K ALL_TAC) THEN
+  ASM_CASES_TAC `h':A = h` THEN ASM_REWRITE_TAC[] THEN STRIP_TAC THENL
+   [FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[]; ALL_TAC] THEN
+  SUBGOAL_THEN `SUBSEQ (MAP (f:A->B) (CONS h' t')) (MAP f t)` MP_TAC THENL
+   [FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[];
+    REWRITE_TAC[MAP] THEN DISCH_TAC] THEN
+  SUBGOAL_THEN `~((f:A->B) h' = f h)` ASSUME_TAC THENL
+   [ASM_MESON_TAC[SUBSEQ_MEM; MEM; ALL_MEM]; ASM_REWRITE_TAC[]]);;
+
+let SUBSEQ_CONS_UPT_LEMMA = prove
+ (`!d a m X. a + d < m /\ SUBSEQ X (UPT (SUC (a + d)) m)
+             ==> SUBSEQ (CONS (a + d) X) (UPT a m)`,
+  INDUCT_TAC THEN REPEAT GEN_TAC THEN STRIP_TAC THEN
+  (SUBGOAL_THEN `a < m` ASSUME_TAC THENL [ASM_ARITH_TAC; ALL_TAC]) THEN
+  ONCE_REWRITE_TAC[UPT_CLAUSES] THEN ASM_REWRITE_TAC[SUBSEQ] THEN
+  RULE_ASSUM_TAC(REWRITE_RULE[ADD_CLAUSES]) THEN
+  ASM_REWRITE_TAC[ADD_CLAUSES] THEN
+  COND_CASES_TAC THENL [ASM_ARITH_TAC; ALL_TAC] THEN
+  FIRST_X_ASSUM(MP_TAC o SPECL [`SUC a`; `m:num`; `X:num list`]) THEN
+  ASM_REWRITE_TAC[ADD_CLAUSES]);;
+
+let SUBSEQ_CONS_UPT = prove
+ (`!a b m X. a <= b /\ b < m /\ SUBSEQ X (UPT (SUC b) m)
+             ==> SUBSEQ (CONS b X) (UPT a m)`,
+  REPEAT GEN_TAC THEN
+  DISCH_THEN(CONJUNCTS_THEN2 MP_TAC STRIP_ASSUME_TAC) THEN
+  REWRITE_TAC[LE_EXISTS] THEN
+  DISCH_THEN(X_CHOOSE_THEN `d:num` SUBST_ALL_TAC) THEN
+  MATCH_MP_TAC SUBSEQ_CONS_UPT_LEMMA THEN ASM_REWRITE_TAC[]);;
+
+let SUBSEQ_SOMES_HIDE_DUPS_REC = prove
+ (`!l x m. PAIRWISE (<=) (CONS x l) /\ ALL (\j. j < m) l
+           ==> SUBSEQ (SOMES (HIDE_DUPS_REC x l)) (UPT (SUC x) m)`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[HIDE_DUPS_REC; SOMES; SUBSEQ] THEN
+  REWRITE_TAC[PAIRWISE; ALL] THEN REPEAT GEN_TAC THEN STRIP_TAC THEN
+  COND_CASES_TAC THENL
+   [FIRST_X_ASSUM SUBST_ALL_TAC THEN REWRITE_TAC[SOMES] THEN
+    FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[PAIRWISE];
+    REWRITE_TAC[SOMES] THEN MATCH_MP_TAC SUBSEQ_CONS_UPT THEN
+    REPEAT CONJ_TAC THENL
+     [ASM_ARITH_TAC; ASM_REWRITE_TAC[];
+      FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[PAIRWISE]]]);;
+
+let LAST_SOMES_HIDE_DUPS_REC = prove
+ (`!l x. LAST (CONS x (SOMES (HIDE_DUPS_REC x l))) = LAST (CONS x l)`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[HIDE_DUPS_REC; SOMES; LAST_CLAUSES] THEN
+  GEN_TAC THEN COND_CASES_TAC THEN ASM_REWRITE_TAC[SOMES; LAST_CLAUSES]);;
+
+let LENGTH_SOMES_NO_NONE = prove
+ (`!l. ~MEM NONE l ==> LENGTH (SOMES l) = LENGTH l`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[MEM; SOMES; LENGTH] THEN
+  POP_ASSUM MP_TAC THEN SPEC_TAC(`h:num option`,`ov:num option`) THEN
+  MATCH_MP_TAC option_INDUCT THEN
+  REWRITE_TAC[SOMES; LENGTH; GSYM option_DISTINCT; DE_MORGAN_THM] THEN
+  MESON_TAC[]);;
+
+let ADJ_HIDE_DUPS_REC_UNACC = prove
+ (`!nb l x.
+     PAIRWISE (<=) (CONS x l) /\ ~CONTAINS_UNACCEPTABLE_EDGE_SND nb x l
+     ==> ALL (\p. ~nb (FST p) (SND p)) (ADJ_SOMES (HIDE_DUPS_REC x l))`,
+  GEN_TAC THEN LIST_INDUCT_TAC THENL
+   [REWRITE_TAC[HIDE_DUPS_REC; ADJ_SOMES_CLAUSES; ALL]; ALL_TAC] THEN
+  POP_ASSUM MP_TAC THEN STRUCT_CASES_TAC(ISPEC `t:num list` list_CASES) THENL
+   [DISCH_TAC THEN REWRITE_TAC[HIDE_DUPS_REC] THEN REPEAT STRIP_TAC THEN
+    COND_CASES_TAC THEN REWRITE_TAC[ADJ_SOMES_CLAUSES; ALL];
+    ALL_TAC] THEN
+  DISCH_TAC THEN X_GEN_TAC `x:num` THEN
+  REWRITE_TAC[CONTAINS_UNACCEPTABLE_EDGE_SND; PAIRWISE; ALL] THEN
+  STRIP_TAC THEN
+  SUBGOAL_THEN `ALL (\p. ~nb (FST p) (SND p))
+                    (ADJ_SOMES (HIDE_DUPS_REC h (CONS h' t')))`
+  ASSUME_TAC THENL
+   [FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[PAIRWISE; ALL] THEN
+    POP_ASSUM MP_TAC THEN COND_CASES_TAC THEN REWRITE_TAC[];
+    ALL_TAC] THEN
+  ONCE_REWRITE_TAC[HIDE_DUPS_REC] THEN COND_CASES_TAC THENL
+   [ASM_REWRITE_TAC[ADJ_SOMES_CLAUSES]; ALL_TAC] THEN
+  REWRITE_TAC[GSYM(CONJUNCT2 HIDE_DUPS); ADJ_SOMES_HIDE_DUPS; HD;
+              NOT_CONS_NIL; ALL_APPEND] THEN
+  ASM_REWRITE_TAC[] THEN COND_CASES_TAC THEN REWRITE_TAC[ALL; FST; SND] THEN
+  (SUBGOAL_THEN `x < h /\ h < h'` STRIP_ASSUME_TAC THENL
+    [ASM_ARITH_TAC; ALL_TAC]) THEN
+  UNDISCH_TAC `~(if x < h /\ h < h' /\ nb h h' then T
+                 else CONTAINS_UNACCEPTABLE_EDGE_SND nb h (CONS h' t'))` THEN
+  ASM_REWRITE_TAC[] THEN ASM_CASES_TAC `(nb:num->num->bool) h h'` THEN
+  ASM_REWRITE_TAC[]);;
+
+let ADJ_HIDE_DUPS_REC_BOUNDS = prove
+ (`!l x a b.
+     PAIRWISE (<=) (CONS x l) /\ MEM (a,b) (ADJ_SOMES (HIDE_DUPS_REC x l))
+     ==> x < a /\ a < b /\ MEM b l`,
+  LIST_INDUCT_TAC THENL
+   [REWRITE_TAC[HIDE_DUPS_REC; ADJ_SOMES_CLAUSES; MEM]; ALL_TAC] THEN
+  REWRITE_TAC[PAIRWISE; ALL] THEN REPEAT GEN_TAC THEN
+  ONCE_REWRITE_TAC[HIDE_DUPS_REC] THEN COND_CASES_TAC THENL
+   [FIRST_X_ASSUM SUBST_ALL_TAC THEN REWRITE_TAC[ADJ_SOMES_CLAUSES] THEN
+    STRIP_TAC THEN
+    FIRST_X_ASSUM(MP_TAC o SPECL [`h:num`; `a:num`; `b:num`]) THEN
+    ASM_REWRITE_TAC[PAIRWISE; MEM] THEN MESON_TAC[];
+    REWRITE_TAC[GSYM(CONJUNCT2 HIDE_DUPS); ADJ_SOMES_HIDE_DUPS;
+                MEM_APPEND] THEN
+    STRIP_TAC THENL
+     [POP_ASSUM MP_TAC THEN COND_CASES_TAC THEN
+      REWRITE_TAC[MEM; PAIR_EQ] THEN STRIP_TAC THEN ASM_REWRITE_TAC[] THEN
+      (SUBGOAL_THEN `h <= HD (t:num list)` ASSUME_TAC THENL
+        [ASM_MESON_TAC[ALL_MEM; MEM_HD]; ALL_TAC]) THEN
+      ASM_SIMP_TAC[MEM_HD; MEM] THEN ASM_ARITH_TAC;
+      FIRST_X_ASSUM(MP_TAC o SPECL [`h:num`; `a:num`; `b:num`]) THEN
+      ASM_REWRITE_TAC[PAIRWISE; MEM] THEN STRIP_TAC THEN
+      ASM_REWRITE_TAC[] THEN ASM_ARITH_TAC]]);;
+
+let ADJ_HIDE_DUPS_PAIRS = prove
+ (`!nb l x a b.
+     PAIRWISE (<=) (CONS x l) /\ ~CONTAINS_UNACCEPTABLE_EDGE nb (CONS x l) /\
+     MEM (a,b) (ADJ_SOMES (HIDE_DUPS (CONS x l)))
+     ==> a < b /\ MEM b l /\ ~nb a b /\ (a = x ==> b = HD l)`,
+  GEN_TAC THEN LIST_INDUCT_TAC THENL
+   [REWRITE_TAC[HIDE_DUPS; HIDE_DUPS_REC; ADJ_SOMES_CLAUSES; MEM];
+    ALL_TAC] THEN
+  POP_ASSUM(K ALL_TAC) THEN REPEAT GEN_TAC THEN
+  REWRITE_TAC[ADJ_SOMES_HIDE_DUPS; MEM_APPEND; NOT_CONS_NIL; HD;
+              CONTAINS_UNACCEPTABLE_EDGE] THEN
+  DISCH_THEN(CONJUNCTS_THEN2 ASSUME_TAC
+    (CONJUNCTS_THEN2 ASSUME_TAC MP_TAC)) THEN
+  SUBGOAL_THEN `~CONTAINS_UNACCEPTABLE_EDGE_SND nb x (CONS h t)`
+  ASSUME_TAC THENL
+   [POP_ASSUM MP_TAC THEN COND_CASES_TAC THEN REWRITE_TAC[]; ALL_TAC] THEN
+  MP_TAC(ISPECL [`nb:num->num->bool`; `CONS (h:num) t`; `x:num`]
+    ADJ_HIDE_DUPS_REC_UNACC) THEN
+  ASM_REWRITE_TAC[GSYM ALL_MEM; FORALL_PAIR_THM; FST; SND] THEN
+  DISCH_TAC THEN
+  MP_TAC(ISPECL [`CONS (h:num) t`; `x:num`] ADJ_HIDE_DUPS_REC_BOUNDS) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_TAC THEN
+  STRIP_TAC THENL
+   [POP_ASSUM MP_TAC THEN COND_CASES_TAC THEN REWRITE_TAC[MEM; PAIR_EQ] THEN
+    STRIP_TAC THEN ASM_REWRITE_TAC[MEM] THEN
+    RULE_ASSUM_TAC(REWRITE_RULE[PAIRWISE; ALL]) THEN
+    (SUBGOAL_THEN `x < h` ASSUME_TAC THENL [ASM_ARITH_TAC; ALL_TAC]) THEN
+    ASM_REWRITE_TAC[] THEN
+    UNDISCH_TAC `~(if x < h /\ nb x h then T
+                   else CONTAINS_UNACCEPTABLE_EDGE_SND nb x (CONS h t))` THEN
+    ASM_REWRITE_TAC[] THEN ASM_CASES_TAC `(nb:num->num->bool) x h` THEN
+    ASM_REWRITE_TAC[];
+    ASM_MESON_TAC[ARITH_RULE `x < a ==> ~(a = x)`]]);;
+
+let ENUM_PAIR_OK = prove
+ (`!g f v a b.
+     DISTINCT (VERTICES f) /\ MEM v (VERTICES f) /\
+     a < b /\ b < LENGTH (VERTICES f) /\
+     (a = 0 ==> b < LENGTH (VERTICES f) - 1) /\
+     ~DUPLICATE_EDGE g f (NEXT_VERTICES f a v) (NEXT_VERTICES f b v)
+     ==> NEXT_VERTICES f b v = NEXT_VERTEX f (NEXT_VERTICES f a v) \/
+         ~MEM (NEXT_VERTICES f b v) (NEIGHBORS g (NEXT_VERTICES f a v))`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  SUBGOAL_THEN
+   `!i j. i < LENGTH (VERTICES f) /\ j < LENGTH (VERTICES f) /\
+          NEXT_VERTICES f i v = NEXT_VERTICES f j v ==> i = j`
+  ASSUME_TAC THENL [ASM_MESON_TAC[NEXT_VERTICES_INJ]; ALL_TAC] THEN
+  SUBGOAL_THEN `~(NEXT_VERTICES f a v = NEXT_VERTICES f b v) /\
+                ~(NEXT_VERTICES f b v = NEXT_VERTICES f a v)`
+  STRIP_ASSUME_TAC THENL
+   [ASM_MESON_TAC[ARITH_RULE `a < b ==> ~(a = b) /\ ~(b = a)`;
+                  ARITH_RULE `a < b /\ b < m ==> a < m`]; ALL_TAC] THEN
+  ASM_CASES_TAC
+   `MEM (NEXT_VERTICES f b v) (NEIGHBORS g (NEXT_VERTICES f a v))` THEN
+  ASM_REWRITE_TAC[] THEN
+  UNDISCH_TAC
+   `~DUPLICATE_EDGE g f (NEXT_VERTICES f a v) (NEXT_VERTICES f b v)` THEN
+  ASM_REWRITE_TAC[DUPLICATE_EDGE; DIRECTED_LENGTH] THEN
+  REWRITE_TAC[ARITH_RULE `2 <= n + 1 <=> ~(n = 0)`; LENGTH_EQ_NIL;
+              DE_MORGAN_THM] THEN
+  STRIP_TAC THENL
+   [CONV_TAC SYM_CONV THEN MATCH_MP_TAC NEXT_VERTEX_OF_BETWEEN_NIL THEN
+    ASM_SIMP_TAC[NEXT_VERTICES_MEM];
+    MP_TAC(ISPECL [`f:face`; `NEXT_VERTICES f b v`; `NEXT_VERTICES f a v`]
+      NEXT_VERTEX_OF_BETWEEN_NIL) THEN
+    ASM_SIMP_TAC[NEXT_VERTICES_MEM; GSYM NEXT_VERTICES_SUC] THEN
+    ASM_CASES_TAC `SUC b < LENGTH (VERTICES f)` THENL
+     [DISCH_TAC THEN
+      SUBGOAL_THEN `SUC b = a` MP_TAC THENL
+       [FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[] THEN
+        ASM_ARITH_TAC;
+        ASM_ARITH_TAC];
+      SUBGOAL_THEN `SUC b = LENGTH (VERTICES f)` SUBST1_TAC THENL
+       [ASM_ARITH_TAC; ALL_TAC] THEN
+      ASM_SIMP_TAC[NEXT_VERTICES_LENGTH] THEN DISCH_TAC THEN
+      SUBGOAL_THEN `0 = a` MP_TAC THENL
+       [FIRST_X_ASSUM MATCH_MP_TAC THEN
+        ASM_REWRITE_TAC[NEXT_VERTICES_0] THEN ASM_ARITH_TAC;
+        ASM_ARITH_TAC]]]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Hiding duplicates commutes with an injective map (packaged form).         *)
+(* ------------------------------------------------------------------------- *)
+
+let HIDE_DUPS_MAP_PROPS = prove
+ (`!(f:num->num) P l.
+     (!x y. P x /\ P y /\ f x = f y ==> x = y) /\ ALL P l
+     ==> SOMES (HIDE_DUPS (MAP f l)) = MAP f (SOMES (HIDE_DUPS l)) /\
+         ADJ_SOMES (HIDE_DUPS (MAP f l)) =
+           MAP (\p. f (FST p), f (SND p)) (ADJ_SOMES (HIDE_DUPS l)) /\
+         (MEM NONE (HIDE_DUPS (MAP f l)) <=> MEM NONE (HIDE_DUPS l))`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  MP_TAC(ISPECL
+   [`\ov. if ov = NONE then NONE else SOME ((f:num->num) (THE ov))`;
+    `f:num->num`; `P:num->bool`] HIDE_DUPS_MAP) THEN
+  ASM_REWRITE_TAC[option_DISTINCT; THE] THEN
+  DISCH_THEN(MP_TAC o SPEC `l:num list`) THEN ASM_REWRITE_TAC[] THEN
+  DISCH_THEN SUBST1_TAC THEN
+  MP_TAC(ISPECL
+   [`\ov. if ov = NONE then NONE else SOME ((f:num->num) (THE ov))`;
+    `f:num->num`] SOMES_MAP_OPTION) THEN
+  MP_TAC(ISPECL
+   [`\ov. if ov = NONE then NONE else SOME ((f:num->num) (THE ov))`;
+    `f:num->num`] ADJ_SOMES_MAP_OPTION) THEN
+  MP_TAC(ISPECL
+   [`\ov. if ov = NONE then NONE else SOME ((f:num->num) (THE ov))`;
+    `f:num->num`] MEM_NONE_MAP_OPTION) THEN
+  REWRITE_TAC[option_DISTINCT; THE] THEN SIMP_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The assembly: an index list CONS 0 l, non-decreasing, with entries below  *)
+(* the face size, at least three entries, last entry the size minus one and *)
+(* second entry below it, passing the duplicate-edge filter, gives a vertex  *)
+(* option list satisfying CHOSEN_OK.                                         *)
+(* ------------------------------------------------------------------------- *)
+
+let CHOSEN_OK_HIDE_DUPS = prove
+ (`!g f v l.
+     DISTINCT (VERTICES f) /\ MEM v (VERTICES f) /\
+     PAIRWISE (<=) (CONS 0 l) /\ ALL (\j. j < LENGTH (VERTICES f)) l /\
+     2 <= LENGTH l /\ LAST l = LENGTH (VERTICES f) - 1 /\
+     HD l < LENGTH (VERTICES f) - 1 /\
+     ~CONTAINS_UNACCEPTABLE_EDGE
+        (\i j. DUPLICATE_EDGE g f (NEXT_VERTICES f i v) (NEXT_VERTICES f j v))
+        (CONS 0 l)
+     ==> CHOSEN_OK g f v
+           (HIDE_DUPS (MAP (\k. NEXT_VERTICES f k v) (CONS 0 l)))`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  SUBGOAL_THEN
+   `!i j. i < LENGTH (VERTICES f) /\ j < LENGTH (VERTICES f) /\
+          NEXT_VERTICES f i v = NEXT_VERTICES f j v ==> i = j`
+  ASSUME_TAC THENL [ASM_MESON_TAC[NEXT_VERTICES_INJ]; ALL_TAC] THEN
+  SUBGOAL_THEN `2 <= LENGTH (VERTICES f) /\ ~(l:num list = [])`
+  STRIP_ASSUME_TAC THENL
+   [CONJ_TAC THENL
+     [ASM_ARITH_TAC;
+      ASM_MESON_TAC[LENGTH_EQ_NIL; ARITH_RULE `2 <= n ==> ~(n = 0)`]];
+    ALL_TAC] THEN
+  MP_TAC(ISPECL [`VERTICES f`; `v:num`] ROTATE_TO_HD) THEN
+  ASM_REWRITE_TAC[] THEN
+  DISCH_THEN(X_CHOOSE_THEN `k:num` (X_CHOOSE_THEN `ws:num list`
+    ASSUME_TAC)) THEN
+  MP_TAC(ISPECL [`VERTICES f`; `k:num`; `v:num`; `ws:num list`]
+    ROTATE_CONS_PROPS) THEN
+  ASM_REWRITE_TAC[] THEN STRIP_TAC THEN
+  MP_TAC(ISPECL [`\k. NEXT_VERTICES f k v`; `\j. j < LENGTH (VERTICES f)`;
+                 `CONS 0 l`] HIDE_DUPS_MAP_PROPS) THEN
+  ASM_REWRITE_TAC[ALL] THEN ANTS_TAC THENL [ASM_ARITH_TAC; ALL_TAC] THEN
+  DISCH_THEN(fun th -> REWRITE_TAC[CHOSEN_OK; th; LENGTH_MAP]) THEN
+  MAP_EVERY EXISTS_TAC [`k:num`; `ws:num list`] THEN ASM_REWRITE_TAC[] THEN
+  REPEAT CONJ_TAC THENL
+   [SUBGOAL_THEN `CONS (v:num) ws =
+                  MAP (\k. NEXT_VERTICES f k v) (UPT 0 (LENGTH (VERTICES f)))`
+    SUBST1_TAC THENL
+     [GEN_REWRITE_TAC LAND_CONV [GSYM(ISPEC `CONS (v:num) ws` MAP_EL_UPT)] THEN
+      ASM_REWRITE_TAC[] THEN MATCH_MP_TAC MAP_EQ THEN
+      REWRITE_TAC[GSYM ALL_MEM; MEM_UPT] THEN REPEAT STRIP_TAC THEN
+      CONV_TAC SYM_CONV THEN MATCH_MP_TAC NEXT_VERTICES_EL THEN
+      EXISTS_TAC `k:num` THEN ASM_REWRITE_TAC[];
+      ALL_TAC] THEN
+    MATCH_MP_TAC SUBSEQ_MAP_INJ THEN
+    EXISTS_TAC `\j. j < LENGTH (VERTICES f)` THEN
+    REWRITE_TAC[] THEN REPEAT CONJ_TAC THENL
+     [ASM_REWRITE_TAC[];
+      REWRITE_TAC[GSYM ALL_MEM; MEM_UPT] THEN ARITH_TAC;
+      REWRITE_TAC[HIDE_DUPS; SOMES] THEN MATCH_MP_TAC SUBSEQ_CONS_UPT THEN
+      REWRITE_TAC[LE_REFL] THEN CONJ_TAC THENL
+       [ASM_ARITH_TAC;
+        MATCH_MP_TAC SUBSEQ_SOMES_HIDE_DUPS_REC THEN ASM_REWRITE_TAC[]]];
+    REWRITE_TAC[HIDE_DUPS; SOMES; MAP; HD; NEXT_VERTICES_0];
+    REWRITE_TAC[HIDE_DUPS; SOMES] THEN
+    SIMP_TAC[LAST_MAP_NONNIL; NOT_CONS_NIL] THEN
+    REWRITE_TAC[LAST_SOMES_HIDE_DUPS_REC] THEN
+    (SUBGOAL_THEN `LAST (CONS 0 l) = LENGTH (VERTICES f) - 1` SUBST1_TAC THENL
+      [ASM_SIMP_TAC[LAST]; ALL_TAC]) THEN
+    MP_TAC(ISPECL [`f:face`; `k:num`; `v:num`; `ws:num list`;
+                   `LENGTH (VERTICES f) - 1`] NEXT_VERTICES_EL) THEN
+    ASM_REWRITE_TAC[] THEN
+    ANTS_TAC THENL [ASM_ARITH_TAC; DISCH_THEN SUBST1_TAC] THEN
+    MP_TAC(ISPEC `CONS (v:num) ws` LAST_EL) THEN
+    ASM_REWRITE_TAC[NOT_CONS_NIL] THEN MESON_TAC[];
+    ASM_CASES_TAC `MEM NONE (HIDE_DUPS (CONS 0 l))` THEN ASM_REWRITE_TAC[] THEN
+    ASM_SIMP_TAC[LENGTH_SOMES_NO_NONE; LENGTH_HIDE_DUPS; LENGTH] THEN
+    ASM_ARITH_TAC;
+    REWRITE_TAC[ALL_MAP; GSYM ALL_MEM; FORALL_PAIR_THM; o_THM; FST; SND] THEN
+    MAP_EVERY X_GEN_TAC [`a:num`; `b:num`] THEN DISCH_TAC THEN
+    MP_TAC(ISPECL
+     [`\i j. DUPLICATE_EDGE g f (NEXT_VERTICES f i v) (NEXT_VERTICES f j v)`;
+      `l:num list`; `0`; `a:num`; `b:num`] ADJ_HIDE_DUPS_PAIRS) THEN
+    ASM_REWRITE_TAC[] THEN STRIP_TAC THEN
+    MATCH_MP_TAC ENUM_PAIR_OK THEN ASM_REWRITE_TAC[] THEN
+    RULE_ASSUM_TAC(REWRITE_RULE[GSYM ALL_MEM]) THEN
+    CONJ_TAC THEN ASM_MESON_TAC[]]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The two theorems of the skeleton (statements unchanged).                  *)
+(* ------------------------------------------------------------------------- *)
+
+let POLY_VLISTS_CHOSEN_OK = prove
+ (`!g f v i vl.
+     DISTINCT (VERTICES f) /\ 3 <= LENGTH (VERTICES f) /\
+     MEM v (VERTICES f) /\ 3 <= i /\ MEM vl (POLY_VLISTS i v f g)
+     ==> CHOSEN_OK g f v vl`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[POLY_VLISTS; MEM_MAP; MEM_FILTER; RIGHT_AND_EXISTS_THM;
+              LEFT_IMP_EXISTS_THM] THEN
+  X_GEN_TAC `is:num list` THEN STRIP_TAC THEN FIRST_X_ASSUM SUBST_ALL_TAC THEN
+  MP_TAC(ISPECL [`i:num`; `LENGTH (VERTICES f)`; `is:num list`]
+    ENUMERATOR_MEM) THEN
+  ASM_REWRITE_TAC[] THEN
+  DISCH_THEN(X_CHOOSE_THEN `js:num list`
+    (CONJUNCTS_THEN2 SUBST_ALL_TAC STRIP_ASSUME_TAC)) THEN
+  RULE_ASSUM_TAC(REWRITE_RULE[CONTAINS_DUPLICATE_EDGE; GSYM ALL_MEM]) THEN
+  SUBGOAL_THEN `~(js:num list = [])` ASSUME_TAC THENL
+   [ASM_MESON_TAC[LENGTH_EQ_NIL; ARITH_RULE `3 <= i ==> ~(i - 2 = 0)`];
+    ALL_TAC] THEN
+  REWRITE_TAC[INDEX_TO_VERTEX_LIST] THEN MATCH_MP_TAC CHOSEN_OK_HIDE_DUPS THEN
+  ASM_REWRITE_TAC[] THEN
+  ASM_SIMP_TAC[LAST_APPEND; HD_APPEND; NOT_CONS_NIL; LAST; LENGTH_APPEND;
+               LENGTH] THEN
+  ASM_REWRITE_TAC[PAIRWISE; PAIRWISE_APPEND; GSYM ALL_MEM; MEM; MEM_APPEND;
+                  LE_0] THEN
+  REPEAT CONJ_TAC THEN TRY ASM_ARITH_TAC THEN
+  ASM_MESON_TAC[MEM_HD; ARITH_RULE `x <= m - 2 ==> x <= m - 1`;
+                ARITH_RULE `3 <= m /\ x <= m - 2 ==> x < m /\ x < m - 1`;
+                ARITH_RULE `3 <= m ==> m - 1 < m`]);;
+
+(* the vertex lists are non-empty and start with SOME v *)
+
+let POLY_VLISTS_HD = prove
+ (`!g f v i vl.
+     MEM v (VERTICES f) /\ 3 <= i /\ MEM vl (POLY_VLISTS i v f g)
+     ==> ~(vl = []) /\ HD vl = SOME v`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[POLY_VLISTS; MEM_MAP; MEM_FILTER; RIGHT_AND_EXISTS_THM;
+              LEFT_IMP_EXISTS_THM] THEN
+  X_GEN_TAC `is:num list` THEN STRIP_TAC THEN FIRST_X_ASSUM SUBST_ALL_TAC THEN
+  MP_TAC(ISPECL [`i:num`; `LENGTH (VERTICES f)`; `is:num list`]
+    ENUMERATOR_MEM) THEN
+  ASM_REWRITE_TAC[] THEN
+  DISCH_THEN(X_CHOOSE_THEN `js:num list`
+    (CONJUNCTS_THEN2 SUBST1_TAC (K ALL_TAC))) THEN
+  REWRITE_TAC[INDEX_TO_VERTEX_LIST; MAP; HIDE_DUPS; NOT_CONS_NIL; HD;
+              NEXT_VERTICES_0]);;
+end;;

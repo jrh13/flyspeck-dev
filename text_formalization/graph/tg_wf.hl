@@ -1,0 +1,38 @@
+(* ========================================================================= *)
+(* tame/tame_wf.ml -- the well-formedness invariant WF_GRAPH used by the     *)
+(* bridge to Hales' tuple representation of graphs (tame_bridge_*.ml): the   *)
+(* face list has one entry per vertex, and every face is non-empty with all  *)
+(* its vertices below the vertex count.  Only these facts make Hales' EL     *)
+(* based facesAt agree with ours under the representation map; the          *)
+(* preservation of WF_GRAPH along NEXT_PLANE is proved in tame_wf_inv.ml.    *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_check.hl";;
+
+module Tg_wf = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+
+let WF_GRAPH = new_definition
+ `WF_GRAPH g <=>
+    FACE_LIST_LEN g /\
+    ALL (\f. ~NULL (VERTICES f) /\
+             ALL (\x. x < COUNT_VERTICES g) (VERTICES f))
+        (FACES g)`;;
+end;;

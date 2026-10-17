@@ -1,0 +1,123 @@
+(* ========================================================================= *)
+(* tame/tame_xcheck.ml -- executable forms of the stronger lower bound       *)
+(* (tame_xlb.ml) for the evaluator: the minimum over the final types with   *)
+(* no exceptional face depends only on (t, q, nf) and is memoised as CV0;   *)
+(* XEXCESS without let.                                                      *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_xlb.hl";;
+flyspeck_needs "graph/tg_exec.hl";;
+
+module Tg_xcheck = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+
+let CV0 = new_definition
+ `CV0 t q nf =
+    MIN_LIST SQUANDER_TARGET
+      (MAP (\p. SQUANDER_VERTEX (FST p) (SND p))
+           (FILTER (\p. t <= FST p /\ q <= SND p /\ FST p + SND p <= 7 /\
+                        (if nf = 0 then FST p + SND p = t + q
+                         else t + q + nf <= FST p + SND p))
+                   TYPE_PAIRS))`;;
+
+let MIN_LIST_LE_DEFAULT = prove
+ (`!d l. MIN_LIST d l <= d`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[MIN_LIST; LE_REFL] THEN
+  ASM_ARITH_TAC);;
+
+let MIN_LIST_APPEND = prove
+ (`!d l m. MIN_LIST d (APPEND l m) = MIN (MIN_LIST d l) (MIN_LIST d m)`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[MIN_LIST; APPEND] THENL
+   [GEN_TAC THEN MP_TAC(SPECL [`d:num`; `m:num list`] MIN_LIST_LE_DEFAULT) THEN
+    ARITH_TAC;
+    GEN_TAC THEN ARITH_TAC]);;
+
+let MIN_LIST_SING = prove
+ (`!d x. MIN_LIST d [x] = MIN x d`,
+  REWRITE_TAC[MIN_LIST]);;
+
+let COMPLETION_VALUE_EXEC = prove
+ (`COMPLETION_VALUE t q e nf s =
+    MIN_LIST SQUANDER_TARGET
+     (APPEND (if e = 0 then [CV0 t q nf] else [])
+      (APPEND
+        (if t + q + e + nf <= 5 /\ (1 <= e \/ 0 < nf)
+         then [s + (if e = 0 then SQUANDER_FACE 5 else 0)] else [])
+        (if t + q + e + nf <= 6 /\
+            (0 < nf \/ 1 <= e /\ t + q + e + nf = 6) /\
+            t <= 5 /\ q = 0 /\ e <= 1
+         then [EXCESS_T_COUNT + (if e = 1 then s else SQUANDER_FACE 5)]
+         else [])))`,
+  REWRITE_TAC[COMPLETION_VALUE; CV_LIST; CV0; MIN_LIST_APPEND] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[MIN_LIST_SING; MIN_LIST] THEN
+  MP_TAC(SPECL [`SQUANDER_TARGET`;
+    `MAP (\p. SQUANDER_VERTEX (FST p) (SND p))
+         (FILTER (\p. t <= FST p /\ q <= SND p /\ FST p + SND p <= 7 /\
+                      (if nf = 0 then FST p + SND p = t + q
+                       else t + q + nf <= FST p + SND p)) TYPE_PAIRS)`]
+    MIN_LIST_LE_DEFAULT) THEN ARITH_TAC);;
+
+let XEXCESS_EXEC = PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] XEXCESS;;
+
+let TYPE_PAIRS_EXEC =
+  REWRITE_CONV[TYPE_PAIRS; UPT; UPT_REC; MAP; FLAT; APPEND;
+               ARITH_RULE `8 - 0 = 8`;
+               ARITH_RULE `8 = SUC 7 /\ 7 = SUC 6 /\ 6 = SUC 5 /\ 5 = SUC 4 /\
+                           4 = SUC 3 /\ 3 = SUC 2 /\ 2 = SUC 1 /\ 1 = SUC 0`]
+    `TYPE_PAIRS`;;
+
+(* Rules for the evaluator: nullary constants rewritten away (the compiled   *)
+(* evaluator does not evaluate bare constants), TYPE_PAIRS inlined.          *)
+
+let CV0_EXEC = REWRITE_RULE[TYPE_PAIRS_EXEC; SQUANDER_TARGET] CV0;;
+
+let COMPLETION_VALUE_EXEC' =
+  REWRITE_RULE[SQUANDER_TARGET; EXCESS_T_COUNT] COMPLETION_VALUE_EXEC;;
+
+let XEXCESS_EXEC' = REWRITE_RULE[SQUANDER_TARGET] XEXCESS_EXEC;;
+
+let XLB_PRUNED_EXEC = REWRITE_RULE[SQUANDER_TARGET] XLB_PRUNED;;
+
+let XSIZE_PRUNED_EXEC = REWRITE_RULE[SQUANDER_TARGET] XSIZE_PRUNED;;
+
+(* Size pruning with the node bound evaluated once: XLB_S g cs = s, then     *)
+(* XSIZE_PRUNED_S per pruned size (XLB_S was recomputed per size).           *)
+let XSIZE_PRUNED_S = new_definition
+ `XSIZE_PRUNED_S (g:graph) cs f i s <=>
+    ALL (\v. ~MEM v (VERTICES f)) cs /\
+    SQUANDER_TARGET <= s + SQUANDER_FACE i`;;
+
+let XSIZE_PRUNED_S_EXEC = REWRITE_RULE[SQUANDER_TARGET] XSIZE_PRUNED_S;;
+
+let XSIZE_PRUNED_VIA_S = prove
+ (`!g cs f i s. XLB_S g cs = s
+                ==> (XSIZE_PRUNED g cs f i <=> XSIZE_PRUNED_S g cs f i s)`,
+  REPEAT STRIP_TAC THEN ASM_REWRITE_TAC[XSIZE_PRUNED; XSIZE_PRUNED_S]);;
+end;;

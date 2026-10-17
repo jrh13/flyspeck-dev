@@ -1,0 +1,66 @@
+(* ========================================================================= *)
+(* tame/tame_main.ml                                                         *)
+(*                                                                           *)
+(* Assembly of the classification theorem from the four class runs: a tame   *)
+(* plane graph is reached from SEED p for some p, the seed's final (p+3)-gon *)
+(* survives as a face, so tame9a forces p <= 3, and the run theorem          *)
+(* TFO ARCHIVE p (SEED p) of that class gives the archive member.            *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_mono.hl";;
+flyspeck_needs "graph/tg_archive.hl";;
+
+module Tg_main = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+
+let FINALS_SEED = prove
+ (`!p. FINALS (SEED p) = [FACE (UPT 0 (MAX_GON p)) Final]`,
+  REWRITE_TAC[FINALS; SEED; SEED_GRAPH_CLAUSES; FILTER; FINAL_FACE]);;
+
+let TAME_REACH_SEED_IMP_LE_3 = prove
+ (`!p g. REACH p (SEED p) g /\ TAME g ==> p <= 3`,
+  REPEAT STRIP_TAC THEN
+  FIRST_ASSUM(MP_TAC o MATCH_MP REACH_FINALS) THEN
+  REWRITE_TAC[FINALS_SEED] THEN DISCH_TAC THEN
+  SUBGOAL_THEN `MEM (FACE (UPT 0 (MAX_GON p)) Final) (FACES g)` MP_TAC THENL
+   [ASM_MESON_TAC[SUBMSET_MEM; MEM; MEM_FINALS]; ALL_TAC] THEN
+  FIRST_X_ASSUM(MP_TAC o CONJUNCT1 o REWRITE_RULE[TAME]) THEN
+  REWRITE_TAC[TAME9A] THEN
+  DISCH_THEN(fun th -> DISCH_THEN(MP_TAC o MATCH_MP th)) THEN
+  REWRITE_TAC[VERTICES; LENGTH_UPT; MAX_GON] THEN ARITH_TAC);;
+
+let CLASSIFICATION_FROM_RUNS = prove
+ (`(!p. p <= 3 ==> TFO ARCHIVE p (SEED p))
+   ==> !g. g IN PLANE_GRAPHS /\ TAME g
+           ==> ?y. MEM y ARCHIVE /\ ISO_FGRAPH (FGRAPH g) y`,
+  DISCH_TAC THEN REWRITE_TAC[IN_PLANE_GRAPHS; GSYM REACH] THEN
+  REPEAT STRIP_TAC THEN
+  SUBGOAL_THEN `p <= 3` ASSUME_TAC THENL
+   [ASM_MESON_TAC[TAME_REACH_SEED_IMP_LE_3]; ALL_TAC] THEN
+  FIRST_X_ASSUM(MP_TAC o SPEC `p:num`) THEN ASM_REWRITE_TAC[TFO] THEN
+  DISCH_THEN MATCH_MP_TAC THEN ASM_REWRITE_TAC[]);;
+
+let CLASSIFICATION_FROM_FOUR_RUNS = prove
+ (`TFO ARCHIVE 0 (SEED 0) /\ TFO ARCHIVE 1 (SEED 1) /\
+   TFO ARCHIVE 2 (SEED 2) /\ TFO ARCHIVE 3 (SEED 3)
+   ==> !g. g IN PLANE_GRAPHS /\ TAME g
+           ==> ?y. MEM y ARCHIVE /\ ISO_FGRAPH (FGRAPH g) y`,
+  STRIP_TAC THEN MATCH_MP_TAC CLASSIFICATION_FROM_RUNS THEN
+  GEN_TAC THEN
+  REWRITE_TAC[ARITH_RULE `p <= 3 <=> p = 0 \/ p = 1 \/ p = 2 \/ p = 3`] THEN
+  STRIP_TAC THEN ASM_REWRITE_TAC[]);;
+end;;

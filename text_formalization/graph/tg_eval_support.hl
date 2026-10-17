@@ -1,0 +1,184 @@
+(* ========================================================================= *)
+(* tame/tame_eval_support.ml                                                 *)
+(*                                                                           *)
+(* Support for the proof-producing evaluator: numerals in the base-100       *)
+(* representation of HOL Light's Formal_ineqs natural-number library         *)
+(* (Arith_nat; hash-cached conversions for SUC, PRE, +, -, times, <=, <, =, *)
+(* MAX), the equality rules on booleans, pairs, lists and the face types,    *)
+(* and the numeral replacement rule.  Adapted from compute-hol-light's       *)
+(* tame/tame_support.hl (A. Solovyev).  Requires compute-hol-light's         *)
+(* eval_support.hl on the load path.                                         *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_check.hl";;
+
+module Tg_eval_support = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+open Tg_arcs;;
+open Tg_split_inv;;
+open Tg_enum_props;;
+open Tg_subdiv_inv;;
+open Tg_xlbthm;;
+open Tg_xdriver_lemmas;;
+open Tg_enum_fast;;
+open Tg_enum_fast2;;
+open Tg_xstats;;
+open Tg_leaf;;
+open Tg_leaf_exec;;
+
+needs "Formal_ineqs/arith_options.hl";;
+Arith_options.base := 200;;
+Arith_options.cached := false;;
+needs "Formal_ineqs/arith/arith_nat.hl";;
+needs "eval_support.hl";;
+
+let f_SUC =
+  let op = Misc_vars.suc_op_num in
+  fun a opt -> trans_opt opt (Arith_nat.raw_suc_conv_hash (mk_comb (op, a)));;
+let f_PRE =
+  let op = Misc_vars.pre_op_num in
+  fun a opt -> trans_opt opt (Arith_nat.raw_pre_hash_conv (mk_comb (op, a)));;
+let f_ADD =
+  let op = Misc_vars.add_op_num in
+  fun a b opt ->
+    trans_opt opt
+      (Arith_nat.raw_add_conv_hash (mk_comb (mk_comb (op, a), b)));;
+let f_SUB =
+  let op = Misc_vars.sub_op_num in
+  fun a b opt ->
+    trans_opt opt
+      (Arith_nat.raw_sub_hash_conv (mk_comb (mk_comb (op, a), b)));;
+let f_MUL =
+  let op = Misc_vars.mul_op_num in
+  fun a b opt ->
+    trans_opt opt
+      (Arith_nat.raw_mul_conv_hash (mk_comb (mk_comb (op, a), b)));;
+let f_LE =
+  let op = Misc_vars.le_op_num in
+  fun a b opt ->
+    trans_opt opt (Arith_nat.raw_le_hash_conv (mk_comb (mk_comb (op, a), b)));;
+let f_LT =
+  let op = Misc_vars.lt_op_num in
+  fun a b opt ->
+    trans_opt opt (Arith_nat.raw_lt_hash_conv (mk_comb (mk_comb (op, a), b)));;
+let f_EQ_num =
+  let op = Misc_vars.eq_op_num in
+  fun a b opt ->
+    trans_opt opt (Arith_nat.raw_eq_hash_conv (mk_comb (mk_comb (op, a), b)));;
+
+let max_case1 = (UNDISCH_ALL o standardize o ARITH_RULE)
+  `(m <= n <=> T) ==> MAX m n = n`;;
+let max_case2 = (UNDISCH_ALL o standardize o ARITH_RULE)
+  `(m <= n <=> F) ==> MAX m n = m`;;
+let min_case1 = (UNDISCH_ALL o standardize o ARITH_RULE)
+  `(m <= n <=> T) ==> MIN m n = m`;;
+let min_case2 = (UNDISCH_ALL o standardize o ARITH_RULE)
+  `(m <= n <=> F) ==> MIN m n = n`;;
+
+let f_MAX a b opt =
+  let le_th = f_LE a b None in
+  let th =
+    if rand (concl le_th) = Misc_vars.t_const then
+      let th0 = INST[b, Misc_vars.n_var_num; a, Misc_vars.m_var_num]
+                     max_case1 in
+      Misc_functions.MY_PROVE_HYP le_th th0
+    else
+      let th0 = INST[a, Misc_vars.m_var_num; b, Misc_vars.n_var_num]
+                     max_case2 in
+      Misc_functions.MY_PROVE_HYP le_th th0 in
+  trans_opt opt th;;
+
+let f_MIN ltm rtm opt =
+  let le_th = f_LE ltm rtm None in
+  let th =
+    if rand (concl le_th) = Misc_vars.t_const then
+      let th0 = INST[ltm, Misc_vars.m_var_num; rtm, Misc_vars.n_var_num]
+                     min_case1 in
+      Misc_functions.MY_PROVE_HYP le_th th0
+    else
+      let th0 = INST[rtm, Misc_vars.n_var_num; ltm, Misc_vars.m_var_num]
+                     min_case2 in
+      Misc_functions.MY_PROVE_HYP le_th th0 in
+  trans_opt opt th;;
+
+let replace_numerals =
+  rand o concl o (DEPTH_CONV Arith_num.NUMERAL_TO_NUM_CONV THENC
+                  PURE_REWRITE_CONV[Arith_num.NUM_THM]);;
+let REPLACE_NUMERALS =
+  CONV_RULE (DEPTH_CONV Arith_num.NUMERAL_TO_NUM_CONV THENC
+             PURE_REWRITE_CONV[Arith_num.NUM_THM]);;
+
+(* |- 'n = n for a small numeral n (the inverse of replace_numerals, built  *)
+(* with the same conversion so that the left-hand side is exactly anum n). *)
+let NUMERAL_BACK n =
+  SYM ((DEPTH_CONV Arith_num.NUMERAL_TO_NUM_CONV THENC
+        PURE_REWRITE_CONV[Arith_num.NUM_THM]) (mk_small_numeral n));;
+
+let print_nat fmt tm =
+  try
+    let n = Arith_num.raw_dest_hash tm in
+    let str = "'" ^ Num.string_of_num n in
+    Format.pp_print_string fmt str
+  with _ -> failwith "print_nat";;
+
+install_user_printer ("nat", print_nat);;
+
+(* ------------------------------------------------------------------------- *)
+(* Equality rules.                                                           *)
+(* ------------------------------------------------------------------------- *)
+
+let NOT_CLAUSES' = prove(`~T = F /\ ~F = T`, REWRITE_TAC[]);;
+
+let EQ_BOOL = prove
+ (`(T = T <=> T) /\ (F = F <=> T) /\ (T = F <=> F) /\ (F = T <=> F)`,
+  REWRITE_TAC[]);;
+
+let EQ_PAIR = prove
+ (`(xy:(A#B) = xy <=> T) /\ ((x:A, y:B) = (a, b) <=> x = a /\ y = b)`,
+  REWRITE_TAC[PAIR_EQ]);;
+
+let EQ_LIST = prove
+ (`(xs:(A)list = xs <=> T) /\ ([] = CONS x xs <=> F) /\
+   (CONS x xs = [] <=> F) /\ (CONS x xs = CONS y ys <=> x = y /\ xs = ys)`,
+  REWRITE_TAC[injectivity "list"; distinctness "list"]);;
+
+let EQ_FACE = prove
+ (`(f:face = f <=> T) /\
+   (FACE xs Final = FACE ys Final <=> xs = ys) /\
+   (FACE xs Nonfinal = FACE ys Nonfinal <=> xs = ys) /\
+   (FACE xs Final = FACE ys Nonfinal <=> F) /\
+   (FACE xs Nonfinal = FACE ys Final <=> F)`,
+  REWRITE_TAC[FACE_INJ; FACETYPE_DISTINCT]);;
+
+let EQ_FACETYPE = prove
+ (`(Final = Final <=> T) /\ (Nonfinal = Nonfinal <=> T) /\
+   (Final = Nonfinal <=> F) /\ (Nonfinal = Final <=> F)`,
+  REWRITE_TAC[FACETYPE_DISTINCT]);;
+end;;

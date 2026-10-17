@@ -1,0 +1,16 @@
+(* ========================================================================= *)
+(* graph/tg_archive_bridge.hl -- GENERATED: the archive-level aliases, from  *)
+(* definitions made late in the Flyspeck build (The_main_statement,          *)
+(* The_kepler_conjecture, Good_list_archive).  Load after                    *)
+(* general/the_kepler_conjecture.hl.                                         *)
+(* ========================================================================= *)
+
+module Tg_archive_bridge = struct
+
+let h_tame_classification = The_main_statement.tame_classification;;
+let h_tame_archive_lists = Good_list_archive.archive_const_def;;
+let h_archive = The_kepler_conjecture.archive;;
+let h_import_tame_classification =
+  The_kepler_conjecture.import_tame_classification;;
+
+end;;

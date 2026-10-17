@@ -1,0 +1,650 @@
+(* ========================================================================= *)
+(* tame/tame_arcs.ml -- arcs of a face: BETWEEN on a list without           *)
+(* repetitions splits it (up to rotation) into the two arcs between two of  *)
+(* its elements, and the directed edges (EDGES, tame_inv.ml) of the two      *)
+(* pieces of a split face are the edges of the face plus the new ones.       *)
+(* Pure list lemmas, no graph structure.                                     *)
+(*                                                                           *)
+(* Route: ARC_DECOMP from MEM_SPLIT and the BETWEEN_BEFORE / BETWEEN_AFTER   *)
+(* lemmas of tame_lbthm.ml; everything about BETWEEN from it and the         *)
+(* invariance of DISTINCT under rotation.  Edges: the edges of FACE l t are  *)
+(* the consecutive pairs (CONSEC) of APPEND l [HD l] (EDGES_CONSEC), so the  *)
+(* edge sets of f and of the two pieces are unions of CONSEC of path         *)
+(* segments and compare propositionally (EDGES_PIECE1/2).                    *)
+(*                                                                           *)
+(* STATEMENT CHANGE (agent arcs): EDGES_SPLIT_FACE_PAIR_COVER and            *)
+(* EDGES_SPLIT_FACE_PAIR_DISJOINT are FALSE as stated in the skeleton for a  *)
+(* split without new vertices along an existing edge: f = FACE [1;2;3] t,   *)
+(* a = 1, b = 2, nv = [] gives the pieces [1;2] and [2;3;1], which share the *)
+(* edge (1,2) of f.  Both now carry the extra hypothesis                     *)
+(*   nv = [] ==> ~(b = NEXT_VERTEX f a) /\ ~(a = NEXT_VERTEX f b)            *)
+(* (Isabelle's pre_splitFace condition; it is exactly the negation of the    *)
+(* failure case, and the form of the k = 0 hypothesis of SPLIT_FACE_INV).    *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_inv.hl";;
+flyspeck_needs "graph/tg_wf_inv.hl";;
+flyspeck_needs "graph/tg_lbthm.hl";;
+
+module Tg_arcs = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+
+(* ------------------------------------------------------------------------- *)
+(* Distinctness is invariant under rotation and reversal.                    *)
+(* ------------------------------------------------------------------------- *)
+
+let DISTINCT_ROTATE1 = prove
+ (`!l:A list. DISTINCT (ROTATE1 l) <=> DISTINCT l`,
+  LIST_INDUCT_TAC THEN
+  REWRITE_TAC[ROTATE1; DISTINCT; DISTINCT_APPEND; MEM] THEN MESON_TAC[]);;
+
+let DISTINCT_ROTATE = prove
+ (`!k l:A list. DISTINCT (ROTATE k l) <=> DISTINCT l`,
+  INDUCT_TAC THEN ASM_REWRITE_TAC[ROTATE_CLAUSES; DISTINCT_ROTATE1]);;
+
+let DISTINCT_REVERSE_EQ = prove
+ (`!l:A list. DISTINCT (REVERSE l) <=> DISTINCT l`,
+  LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[REVERSE; DISTINCT; DISTINCT_APPEND; MEM; MEM_REVERSE] THEN
+  MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The arc decomposition.                                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let ARC_DECOMP = prove
+ (`!vs (a:A) b. DISTINCT vs /\ MEM a vs /\ MEM b vs /\ ~(a = b)
+                ==> ?k. ROTATE k vs =
+                        APPEND (CONS a (BETWEEN vs a b))
+                               (CONS b (BETWEEN vs b a))`,
+  REPEAT STRIP_TAC THEN UNDISCH_TAC `MEM (b:A) vs` THEN
+  FIRST_X_ASSUM(X_CHOOSE_THEN `P:A list` (X_CHOOSE_THEN `S:A list`
+    SUBST_ALL_TAC) o MATCH_MP MEM_SPLIT) THEN
+  REWRITE_TAC[MEM_APPEND; MEM] THEN STRIP_TAC THENL
+   [FIRST_X_ASSUM(X_CHOOSE_THEN `P1:A list` (X_CHOOSE_THEN `P2:A list`
+      SUBST_ALL_TAC) o MATCH_MP MEM_SPLIT) THEN
+    SUBGOAL_THEN
+     `APPEND (APPEND P1 (CONS (b:A) P2)) (CONS a S) =
+      APPEND P1 (CONS b (APPEND P2 (CONS a S)))`
+    SUBST_ALL_TAC THENL
+     [REWRITE_TAC[GSYM APPEND_ASSOC; APPEND]; ALL_TAC] THEN
+    ASM_SIMP_TAC[BETWEEN_BEFORE; BETWEEN_AFTER] THEN
+    EXISTS_TAC `LENGTH (APPEND P1 (CONS (b:A) P2))` THEN
+    SUBGOAL_THEN
+     `APPEND P1 (CONS b (APPEND P2 (CONS a S))) =
+      APPEND (APPEND P1 (CONS (b:A) P2)) (CONS a S)`
+    SUBST1_TAC THENL
+     [REWRITE_TAC[GSYM APPEND_ASSOC; APPEND]; ALL_TAC] THEN
+    REWRITE_TAC[ROTATE_APPEND_LENGTH; GSYM APPEND_ASSOC; APPEND];
+    ASM_MESON_TAC[];
+    FIRST_X_ASSUM(X_CHOOSE_THEN `P1:A list` (X_CHOOSE_THEN `P2:A list`
+      SUBST_ALL_TAC) o MATCH_MP MEM_SPLIT) THEN
+    ASM_SIMP_TAC[BETWEEN_BEFORE; BETWEEN_AFTER] THEN
+    EXISTS_TAC `LENGTH (P:A list)` THEN
+    REWRITE_TAC[ROTATE_APPEND_LENGTH; GSYM APPEND_ASSOC; APPEND]]);;
+
+(* the rotated list is repetition-free with the same members and length *)
+
+let ARC_DECOMP_PROPS = prove
+ (`!vs (a:A) b. DISTINCT vs /\ MEM a vs /\ MEM b vs /\ ~(a = b)
+                ==> DISTINCT (APPEND (CONS a (BETWEEN vs a b))
+                                     (CONS b (BETWEEN vs b a))) /\
+                    (!x. MEM x (APPEND (CONS a (BETWEEN vs a b))
+                                       (CONS b (BETWEEN vs b a))) <=>
+                         MEM x vs) /\
+                    LENGTH (APPEND (CONS a (BETWEEN vs a b))
+                                   (CONS b (BETWEEN vs b a))) = LENGTH vs`,
+  REPEAT GEN_TAC THEN DISCH_TAC THEN
+  FIRST_ASSUM(X_CHOOSE_THEN `k:num` (SUBST1_TAC o SYM) o
+    MATCH_MP ARC_DECOMP) THEN
+  ASM_REWRITE_TAC[DISTINCT_ROTATE; MEM_ROTATE; LENGTH_ROTATE]);;
+
+let MEM_BETWEEN_DISTINCT = prove
+ (`!vs (a:A) b x. DISTINCT vs /\ MEM a vs /\ MEM b vs /\ ~(a = b) /\
+                  MEM x (BETWEEN vs a b)
+                  ==> MEM x vs /\ ~(x = a) /\ ~(x = b) /\
+                      ~MEM x (BETWEEN vs b a)`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  MP_TAC(ISPECL [`vs:A list`; `a:A`; `b:A`] ARC_DECOMP_PROPS) THEN
+  ASM_REWRITE_TAC[DISTINCT_APPEND; DISTINCT; MEM_APPEND; MEM] THEN
+  DISCH_THEN(MP_TAC o CONJUNCT1) THEN ASM_MESON_TAC[MEM_BETWEEN]);;
+
+let BETWEEN_DISTINCT = prove
+ (`!vs (a:A) b. DISTINCT vs /\ MEM a vs /\ MEM b vs /\ ~(a = b)
+                ==> DISTINCT (BETWEEN vs a b)`,
+  REPEAT GEN_TAC THEN DISCH_THEN(MP_TAC o MATCH_MP ARC_DECOMP_PROPS) THEN
+  REWRITE_TAC[DISTINCT_APPEND; DISTINCT] THEN SIMP_TAC[]);;
+
+let LENGTH_BETWEEN_SUM = prove
+ (`!vs (a:A) b. DISTINCT vs /\ MEM a vs /\ MEM b vs /\ ~(a = b)
+                ==> LENGTH (BETWEEN vs a b) + LENGTH (BETWEEN vs b a) + 2 =
+                    LENGTH vs`,
+  REPEAT GEN_TAC THEN DISCH_THEN(MP_TAC o MATCH_MP ARC_DECOMP_PROPS) THEN
+  DISCH_THEN(MP_TAC o CONJUNCT2 o CONJUNCT2) THEN
+  REWRITE_TAC[LENGTH_APPEND; LENGTH] THEN ARITH_TAC);;
+
+(* every element of vs other than a and b lies in exactly one arc *)
+
+let MEM_BETWEEN_CASES = prove
+ (`!vs (a:A) b x. DISTINCT vs /\ MEM a vs /\ MEM b vs /\ ~(a = b) /\ MEM x vs
+                  ==> x = a \/ x = b \/
+                      MEM x (BETWEEN vs a b) \/ MEM x (BETWEEN vs b a)`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  MP_TAC(ISPECL [`vs:A list`; `a:A`; `b:A`] ARC_DECOMP_PROPS) THEN
+  ASM_REWRITE_TAC[] THEN
+  DISCH_THEN(MP_TAC o SPEC `x:A` o CONJUNCT1 o CONJUNCT2) THEN
+  ASM_REWRITE_TAC[MEM_APPEND; MEM] THEN MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Successors (NEXT_ELEM with default the head) on a list without            *)
+(* repetitions: invariant under rotation, and along the arcs.                *)
+(* ------------------------------------------------------------------------- *)
+
+let NEXT_ELEM_ROTATE1 = prove
+ (`!vs (x:A). DISTINCT vs /\ MEM x vs
+              ==> NEXT_ELEM (ROTATE1 vs) (HD (ROTATE1 vs)) x =
+                  NEXT_ELEM vs (HD vs) x`,
+  REPEAT GEN_TAC THEN STRUCT_CASES_TAC(ISPEC `vs:A list` list_CASES) THEN
+  REWRITE_TAC[MEM; ROTATE1; DISTINCT; HD] THEN STRIP_TAC THENL
+   [FIRST_X_ASSUM SUBST_ALL_TAC THEN
+    MP_TAC(ISPECL [`[]:A list`; `h:A`; `t:A list`; `h:A`]
+      NEXT_ELEM_DISTINCT) THEN
+    REWRITE_TAC[APPEND; MEM] THEN DISCH_THEN SUBST1_TAC THEN
+    ASM_SIMP_TAC[NEXT_ELEM_DISTINCT; HD_APPEND; HD];
+    FIRST_X_ASSUM(X_CHOOSE_THEN `t1:A list` (X_CHOOSE_THEN `t2:A list`
+      SUBST_ALL_TAC) o MATCH_MP MEM_SPLIT) THEN
+    SUBGOAL_THEN `~MEM (x:A) t1 /\ ~MEM x (CONS h t1)` STRIP_ASSUME_TAC THENL
+     [RULE_ASSUM_TAC(REWRITE_RULE[DISTINCT_APPEND; DISTINCT; MEM_APPEND;
+                                  MEM]) THEN
+      ASM_MESON_TAC[MEM];
+      ALL_TAC] THEN
+    SUBGOAL_THEN
+     `APPEND (APPEND t1 (CONS (x:A) t2)) [h] =
+      APPEND t1 (CONS x (APPEND t2 [h]))`
+    SUBST1_TAC THENL [REWRITE_TAC[GSYM APPEND_ASSOC; APPEND]; ALL_TAC] THEN
+    SUBGOAL_THEN
+     `CONS (h:A) (APPEND t1 (CONS x t2)) = APPEND (CONS h t1) (CONS x t2)`
+    SUBST1_TAC THENL [REWRITE_TAC[APPEND]; ALL_TAC] THEN
+    ASM_SIMP_TAC[NEXT_ELEM_DISTINCT; APPEND_EQ_NIL; NOT_CONS_NIL;
+                 HD_APPEND; HD]]);;
+
+let NEXT_ELEM_ROTATE = prove
+ (`!vs k (x:A). DISTINCT vs /\ MEM x vs
+                ==> NEXT_ELEM (ROTATE k vs) (HD (ROTATE k vs)) x =
+                    NEXT_ELEM vs (HD vs) x`,
+  ONCE_REWRITE_TAC[SWAP_FORALL_THM] THEN INDUCT_TAC THEN
+  REWRITE_TAC[ROTATE_CLAUSES] THEN REPEAT STRIP_TAC THEN
+  MP_TAC(ISPECL [`vs:A list`; `x:A`] NEXT_ELEM_ROTATE1) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN(SUBST1_TAC o SYM) THEN
+  FIRST_X_ASSUM MATCH_MP_TAC THEN
+  ASM_REWRITE_TAC[DISTINCT_ROTATE1; MEM_ROTATE1]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Edges of a face.                                                          *)
+(* ------------------------------------------------------------------------- *)
+
+let MEM_EDGES = prove
+ (`!f x y. MEM (x,y) (EDGES f) <=> MEM x (VERTICES f) /\ y = NEXT_VERTEX f x`,
+  REWRITE_TAC[EDGES; MEM_MAP; PAIR_EQ] THEN MESON_TAC[]);;
+
+let EDGES_FACE_ROTATE = prove
+ (`!vs k t x y. DISTINCT vs
+                ==> (MEM (x,y) (EDGES (FACE (ROTATE k vs) t)) <=>
+                     MEM (x,y) (EDGES (FACE vs t)))`,
+  REPEAT STRIP_TAC THEN
+  REWRITE_TAC[MEM_EDGES; VERTICES; NEXT_VERTEX_EXEC; MEM_ROTATE] THEN
+  ASM_MESON_TAC[NEXT_ELEM_ROTATE]);;
+
+let EDGES_FACETYPE = prove
+ (`!vs t t'. EDGES (FACE vs t) = EDGES (FACE vs t')`,
+  REWRITE_TAC[EDGES; NEXT_VERTEX_EXEC; VERTICES]);;
+
+(* The edges of the two pieces of SPLIT_FACE_PAIR f a b nv for a face f with *)
+(* distinct vertices, a and b distinct vertices of f, and nv the list of new *)
+(* vertices (distinct and disjoint from f).                                  *)
+
+let SPLIT_FACE_PAIR_VERTICES = prove
+ (`!f a b nv.
+     VERTICES (FST (SPLIT_FACE_PAIR f a b nv)) =
+       APPEND (REVERSE nv) (APPEND (CONS a (BETWEEN (VERTICES f) a b)) [b]) /\
+     VERTICES (SND (SPLIT_FACE_PAIR f a b nv)) =
+       APPEND (CONS b (BETWEEN (VERTICES f) b a)) (CONS a nv) /\
+     ~FINAL_FACE (FST (SPLIT_FACE_PAIR f a b nv)) /\
+     ~FINAL_FACE (SND (SPLIT_FACE_PAIR f a b nv))`,
+  REWRITE_TAC[SPLIT_FACE_PAIR_EXEC; VERTICES; FINAL_FACE; APPEND;
+              GSYM APPEND_ASSOC]);;
+
+let SPLIT_FACE_PAIR_DISTINCT = prove
+ (`!f a b nv.
+     DISTINCT (VERTICES f) /\ MEM a (VERTICES f) /\ MEM b (VERTICES f) /\
+     ~(a = b) /\ DISTINCT nv /\ (!x. MEM x nv ==> ~MEM x (VERTICES f))
+     ==> DISTINCT (VERTICES (FST (SPLIT_FACE_PAIR f a b nv))) /\
+         DISTINCT (VERTICES (SND (SPLIT_FACE_PAIR f a b nv)))`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  REWRITE_TAC[SPLIT_FACE_PAIR_VERTICES] THEN
+  MP_TAC(ISPECL [`VERTICES f`; `a:num`; `b:num`] ARC_DECOMP_PROPS) THEN
+  ASM_REWRITE_TAC[DISTINCT_APPEND; DISTINCT; MEM_APPEND; MEM;
+                  DISTINCT_REVERSE_EQ; MEM_REVERSE] THEN
+  STRIP_TAC THEN ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[]);;
+
+(* Consecutive pairs of a list (the edges of a path).                        *)
+
+let CONSEC = define
+ `CONSEC [] = [] /\
+  CONSEC [x:A] = [] /\
+  CONSEC (CONS x (CONS y t)) = CONS (x,y) (CONSEC (CONS y t))`;;
+
+let CONSEC_CONS = prove
+ (`!(x:A) l. ~(l = []) ==> CONSEC (CONS x l) = CONS (x, HD l) (CONSEC l)`,
+  REPEAT GEN_TAC THEN STRUCT_CASES_TAC(ISPEC `l:A list` list_CASES) THEN
+  REWRITE_TAC[NOT_CONS_NIL; CONSEC; HD]);;
+
+let MEM_CONSEC_IMP = prove
+ (`!l (u:A) v. MEM (u,v) (CONSEC l) ==> MEM u l /\ MEM v l`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[CONSEC; MEM] THEN
+  REPEAT GEN_TAC THEN ASM_CASES_TAC `t:A list = []` THENL
+   [ASM_REWRITE_TAC[CONSEC; MEM];
+    ASM_SIMP_TAC[CONSEC_CONS; MEM; PAIR_EQ] THEN ASM_MESON_TAC[MEM_HD]]);;
+
+(* first components are not the last element, second ones not the first *)
+
+let MEM_CONSEC_FST_IMP = prove
+ (`!P (u:A) v z. MEM (u,v) (CONSEC (APPEND P [z])) ==> MEM u P`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[APPEND; CONSEC; MEM] THEN
+  REPEAT GEN_TAC THEN
+  SIMP_TAC[CONSEC_CONS; APPEND_EQ_NIL; NOT_CONS_NIL; MEM; PAIR_EQ] THEN
+  ASM_MESON_TAC[]);;
+
+let MEM_CONSEC_SND_IMP = prove
+ (`!S (z:A) u v. MEM (u,v) (CONSEC (CONS z S)) ==> MEM v S`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[CONSEC; MEM; PAIR_EQ] THEN
+  ASM_MESON_TAC[]);;
+
+(* splitting a path at an element (not usable as a rewrite rule: it loops) *)
+
+let CONSEC_APPEND_CONS = prove
+ (`!P (x:A) S. CONSEC (APPEND P (CONS x S)) =
+               APPEND (CONSEC (APPEND P [x])) (CONSEC (CONS x S))`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[APPEND; CONSEC] THEN
+  REPEAT GEN_TAC THEN
+  SIMP_TAC[CONSEC_CONS; APPEND_EQ_NIL; NOT_CONS_NIL; APPEND] THEN
+  FIRST_X_ASSUM(MP_TAC o SPECL [`x:A`; `S:A list`]) THEN
+  DISCH_THEN SUBST1_TAC THEN REWRITE_TAC[HD_APPEND; HD]);;
+
+let MEM_CONSEC_REVERSE = prove
+ (`!p (x:A) y. MEM (x,y) (CONSEC (REVERSE p)) <=> MEM (y,x) (CONSEC p)`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[REVERSE; CONSEC; MEM] THEN
+  POP_ASSUM MP_TAC THEN STRUCT_CASES_TAC(ISPEC `t:A list` list_CASES) THEN
+  REWRITE_TAC[REVERSE; APPEND; CONSEC; MEM] THEN
+  REWRITE_TAC[GSYM APPEND_ASSOC; APPEND] THEN
+  DISCH_TAC THEN REPEAT GEN_TAC THEN
+  MP_TAC(ISPECL [`REVERSE (t':A list)`; `h':A`; `[h:A]`]
+    CONSEC_APPEND_CONS) THEN
+  DISCH_THEN SUBST1_TAC THEN
+  ASM_REWRITE_TAC[MEM_APPEND; CONSEC; MEM; PAIR_EQ] THEN MESON_TAC[]);;
+
+(* the successor of x in a path through x, x not repeated *)
+
+let MEM_CONSEC_FST_LAST = prove
+ (`!P (x:A) S z y.
+     ~MEM x P /\ ~MEM x S
+     ==> (MEM (x,y) (CONSEC (APPEND P (CONS x (APPEND S [z])))) <=>
+          y = HD (APPEND S [z]))`,
+  REPEAT STRIP_TAC THEN
+  MP_TAC(ISPECL [`P:A list`; `x:A`; `APPEND S [z:A]`] CONSEC_APPEND_CONS) THEN
+  DISCH_THEN SUBST1_TAC THEN
+  SIMP_TAC[CONSEC_CONS; APPEND_EQ_NIL; NOT_CONS_NIL; MEM_APPEND; MEM;
+           PAIR_EQ] THEN
+  ASM_MESON_TAC[MEM_CONSEC_FST_IMP]);;
+
+let MEM_CONSEC_FST_DISTINCT = prove
+ (`!P (x:A) S y.
+     ~MEM x P /\ ~MEM x S
+     ==> (MEM (x,y) (CONSEC (APPEND P (CONS x S))) <=>
+          ~(S = []) /\ y = HD S)`,
+  REPEAT STRIP_TAC THEN
+  MP_TAC(ISPECL [`P:A list`; `x:A`; `S:A list`] CONSEC_APPEND_CONS) THEN
+  DISCH_THEN SUBST1_TAC THEN REWRITE_TAC[MEM_APPEND] THEN
+  ASM_CASES_TAC `S:A list = []` THEN
+  ASM_SIMP_TAC[CONSEC_CONS; CONSEC; MEM; PAIR_EQ] THEN
+  ASM_MESON_TAC[MEM_CONSEC_FST_IMP; MEM_CONSEC_IMP]);;
+
+let MEM_CONSEC_SND_DISTINCT = prove
+ (`!P (x:A) S y.
+     ~MEM x P /\ ~MEM x S
+     ==> (MEM (y,x) (CONSEC (APPEND P (CONS x S))) <=>
+          ~(P = []) /\ y = LAST P)`,
+  REPEAT STRIP_TAC THEN ONCE_REWRITE_TAC[GSYM MEM_CONSEC_REVERSE] THEN
+  REWRITE_TAC[REVERSE_APPEND; REVERSE; GSYM APPEND_ASSOC; APPEND] THEN
+  ASM_SIMP_TAC[MEM_CONSEC_FST_DISTINCT; MEM_REVERSE; REVERSE_EQ_EMPTY] THEN
+  ASM_CASES_TAC `P:A list = []` THEN ASM_SIMP_TAC[HD_REVERSE]);;
+
+let CONSEC_ANTISYM = prove
+ (`!p (x:A) y. DISTINCT p /\ MEM (x,y) (CONSEC p) ==> ~MEM (y,x) (CONSEC p)`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  SUBGOAL_THEN `MEM (x:A) p` MP_TAC THENL
+   [ASM_MESON_TAC[MEM_CONSEC_IMP]; ALL_TAC] THEN
+  DISCH_THEN(X_CHOOSE_THEN `P:A list` (X_CHOOSE_THEN `S:A list`
+    SUBST_ALL_TAC) o MATCH_MP MEM_SPLIT) THEN
+  FIRST_ASSUM(STRIP_ASSUME_TAC o MATCH_MP DISTINCT_APPEND_CONS_NOT_MEM) THEN
+  UNDISCH_TAC `MEM (x:A,y) (CONSEC (APPEND P (CONS x S)))` THEN
+  ASM_SIMP_TAC[MEM_CONSEC_FST_DISTINCT; MEM_CONSEC_SND_DISTINCT] THEN
+  STRIP_TAC THEN
+  UNDISCH_TAC `DISTINCT (APPEND P (CONS (x:A) S))` THEN
+  REWRITE_TAC[DISTINCT_APPEND] THEN
+  ASM_MESON_TAC[MEM_HD; MEM_LAST_NONNIL; MEM]);;
+
+(* the reverse of the path a, nv, b *)
+
+let CONSEC_PATH_REVERSE = prove
+ (`!(a:A) nv b x y.
+     MEM (y,x) (CONSEC (CONS a (APPEND nv [b]))) <=>
+     MEM (x,y) (CONSEC (CONS b (APPEND (REVERSE nv) [a])))`,
+  REPEAT GEN_TAC THEN
+  GEN_REWRITE_TAC LAND_CONV [GSYM MEM_CONSEC_REVERSE] THEN
+  REWRITE_TAC[REVERSE; REVERSE_APPEND; GSYM APPEND_ASSOC; APPEND]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The edges of a face with repetition-free vertex list l are the            *)
+(* consecutive pairs of l closed up with its head.                           *)
+(* ------------------------------------------------------------------------- *)
+
+let EDGES_CONSEC = prove
+ (`!l t x y. DISTINCT l /\ ~(l = [])
+             ==> (MEM (x,y) (EDGES (FACE l t)) <=>
+                  MEM (x,y) (CONSEC (APPEND l [HD l])))`,
+  REPEAT STRIP_TAC THEN REWRITE_TAC[MEM_EDGES; VERTICES; NEXT_VERTEX_EXEC] THEN
+  ASM_CASES_TAC `MEM (x:num) l` THEN ASM_REWRITE_TAC[] THENL
+   [ALL_TAC; ASM_MESON_TAC[MEM_CONSEC_FST_IMP]] THEN
+  FIRST_X_ASSUM(X_CHOOSE_THEN `P:num list` (X_CHOOSE_THEN `S:num list`
+    SUBST_ALL_TAC) o MATCH_MP MEM_SPLIT) THEN
+  FIRST_ASSUM(STRIP_ASSUME_TAC o MATCH_MP DISTINCT_APPEND_CONS_NOT_MEM) THEN
+  ASM_SIMP_TAC[NEXT_ELEM_DISTINCT] THEN
+  REWRITE_TAC[GSYM APPEND_ASSOC; APPEND] THEN
+  ASM_SIMP_TAC[MEM_CONSEC_FST_LAST] THEN REWRITE_TAC[HD_APPEND; HD]);;
+
+(* the edges of f along the arc decomposition a, arc a b, b, arc b a *)
+
+let ARC_EDGES = prove
+ (`!vs t a b x y.
+     DISTINCT vs /\ MEM a vs /\ MEM b vs /\ ~(a = b)
+     ==> (MEM (x,y) (EDGES (FACE vs t)) <=>
+          MEM (x,y)
+              (CONSEC (CONS a (APPEND (BETWEEN vs a b)
+                              (CONS b (APPEND (BETWEEN vs b a) [a]))))))`,
+  REPEAT STRIP_TAC THEN
+  MP_TAC(ISPECL [`vs:num list`; `a:num`; `b:num`] ARC_DECOMP) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN(X_CHOOSE_TAC `k:num`) THEN
+  MP_TAC(ISPECL [`vs:num list`; `k:num`; `t:facetype`; `x:num`; `y:num`]
+    EDGES_FACE_ROTATE) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN(SUBST1_TAC o SYM) THEN
+  MP_TAC(ISPECL [`vs:num list`; `a:num`; `b:num`] ARC_DECOMP_PROPS) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN(ASSUME_TAC o CONJUNCT1) THEN
+  ASM_SIMP_TAC[EDGES_CONSEC; APPEND_EQ_NIL; NOT_CONS_NIL] THEN
+  REWRITE_TAC[HD; APPEND; GSYM APPEND_ASSOC]);;
+
+(* the edges of the two pieces, for explicit arcs B1 (from a to b) and B2   *)
+(* (from b to a): the arc edges of f plus the reversed path (first piece) or *)
+(* the path a, nv, b (second piece); pure propositional reasoning on the     *)
+(* CONSEC segments once the lists are cut at a and b                         *)
+
+let EDGES_PIECE1 = prove
+ (`!a b B1 B2 nv x y.
+     DISTINCT (APPEND (CONS a B1) (CONS b B2)) /\
+     DISTINCT (APPEND (REVERSE nv) (CONS a (APPEND B1 [b])))
+     ==> (MEM (x,y) (EDGES (FACE (APPEND (REVERSE nv) (CONS a (APPEND B1 [b])))
+                                 Nonfinal)) <=>
+          MEM (x,y) (CONSEC (CONS a (APPEND B1 (CONS b (APPEND B2 [a]))))) /\
+          (x = a \/ MEM x B1) \/
+          MEM (y,x) (CONSEC (CONS a (APPEND nv [b]))))`,
+  REPEAT STRIP_TAC THEN
+  ASM_SIMP_TAC[EDGES_CONSEC; APPEND_EQ_NIL; NOT_CONS_NIL] THEN
+  ONCE_REWRITE_TAC[CONSEC_PATH_REVERSE] THEN
+  ABBREV_TAC
+   `h = HD (APPEND (REVERSE (nv:num list)) (CONS a (APPEND B1 [b])))` THEN
+  SUBGOAL_THEN `HD (APPEND (REVERSE (nv:num list)) [a]) = h` ASSUME_TAC THENL
+   [EXPAND_TAC "h" THEN REWRITE_TAC[HD_APPEND; HD]; ALL_TAC] THEN
+  REWRITE_TAC[GSYM APPEND_ASSOC; APPEND] THEN
+  MP_TAC(ISPECL [`REVERSE (nv:num list)`; `a:num`;
+                 `APPEND (B1:num list) (CONS b [h])`] CONSEC_APPEND_CONS) THEN
+  DISCH_THEN SUBST1_TAC THEN
+  MP_TAC(ISPECL [`CONS (a:num) B1`; `b:num`; `[h:num]`]
+    CONSEC_APPEND_CONS) THEN
+  REWRITE_TAC[APPEND; CONSEC] THEN DISCH_THEN SUBST1_TAC THEN
+  MP_TAC(ISPECL [`CONS (a:num) B1`; `b:num`; `APPEND B2 [a:num]`]
+    CONSEC_APPEND_CONS) THEN
+  REWRITE_TAC[APPEND] THEN DISCH_THEN SUBST1_TAC THEN
+  MP_TAC(ISPECL [`b:num`; `APPEND (REVERSE nv) [a:num]`] CONSEC_CONS) THEN
+  ASM_REWRITE_TAC[APPEND_EQ_NIL; NOT_CONS_NIL] THEN DISCH_THEN SUBST1_TAC THEN
+  REWRITE_TAC[MEM_APPEND; MEM; PAIR_EQ] THEN
+  MP_TAC(ISPECL [`CONS (a:num) B1`; `x:num`; `y:num`; `b:num`]
+    MEM_CONSEC_FST_IMP) THEN
+  MP_TAC(ISPECL [`CONS (b:num) B2`; `x:num`; `y:num`; `a:num`]
+    MEM_CONSEC_FST_IMP) THEN
+  REWRITE_TAC[APPEND; MEM] THEN
+  UNDISCH_TAC `DISTINCT (APPEND (CONS (a:num) B1) (CONS b B2))` THEN
+  REWRITE_TAC[DISTINCT_APPEND; MEM] THEN
+  DISCH_THEN(MP_TAC o SPEC `x:num` o CONJUNCT2 o CONJUNCT2) THEN
+  MATCH_ACCEPT_TAC(TAUT
+   `(P ==> ~Q) ==> (D ==> Q) ==> (B ==> P)
+    ==> ((A \/ B \/ C) <=> (B \/ D) /\ P \/ C \/ A)`));;
+
+let EDGES_PIECE2 = prove
+ (`!a b B1 B2 nv x y.
+     DISTINCT (APPEND (CONS a B1) (CONS b B2)) /\
+     DISTINCT (CONS b (APPEND B2 (CONS a nv)))
+     ==> (MEM (x,y) (EDGES (FACE (CONS b (APPEND B2 (CONS a nv)))
+                                 Nonfinal)) <=>
+          MEM (x,y) (CONSEC (CONS a (APPEND B1 (CONS b (APPEND B2 [a]))))) /\
+          (x = b \/ MEM x B2) \/
+          MEM (x,y) (CONSEC (CONS a (APPEND nv [b]))))`,
+  REPEAT STRIP_TAC THEN
+  ASM_SIMP_TAC[EDGES_CONSEC; NOT_CONS_NIL] THEN
+  REWRITE_TAC[HD; GSYM APPEND_ASSOC; APPEND] THEN
+  MP_TAC(ISPECL [`CONS (b:num) B2`; `a:num`; `APPEND nv [b:num]`]
+    CONSEC_APPEND_CONS) THEN
+  REWRITE_TAC[APPEND] THEN DISCH_THEN SUBST1_TAC THEN
+  MP_TAC(ISPECL [`CONS (a:num) B1`; `b:num`; `APPEND B2 [a:num]`]
+    CONSEC_APPEND_CONS) THEN
+  REWRITE_TAC[APPEND] THEN DISCH_THEN SUBST1_TAC THEN
+  REWRITE_TAC[MEM_APPEND] THEN
+  MP_TAC(ISPECL [`CONS (a:num) B1`; `x:num`; `y:num`; `b:num`]
+    MEM_CONSEC_FST_IMP) THEN
+  MP_TAC(ISPECL [`CONS (b:num) B2`; `x:num`; `y:num`; `a:num`]
+    MEM_CONSEC_FST_IMP) THEN
+  REWRITE_TAC[APPEND; MEM] THEN
+  UNDISCH_TAC `DISTINCT (APPEND (CONS (a:num) B1) (CONS b B2))` THEN
+  REWRITE_TAC[DISTINCT_APPEND; MEM] THEN
+  DISCH_THEN(MP_TAC o SPEC `x:num` o CONJUNCT2 o CONJUNCT2) THEN
+  MESON_TAC[]);;
+
+(* edges of the pieces: the arc edges of f (those starting at a or inside   *)
+(* the arc from a to b for the first piece, at b or inside the arc from b   *)
+(* to a for the second) plus the edges of the path a, nv, b (second piece)  *)
+(* and their reverses (first piece).                                        *)
+
+let EDGES_SPLIT_FACE_PAIR = prove
+ (`!f a b nv x y.
+     DISTINCT (VERTICES f) /\ MEM a (VERTICES f) /\ MEM b (VERTICES f) /\
+     ~(a = b) /\ DISTINCT nv /\ (!x. MEM x nv ==> ~MEM x (VERTICES f))
+     ==> (MEM (x,y) (EDGES (FST (SPLIT_FACE_PAIR f a b nv))) <=>
+            MEM (x,y) (EDGES f) /\
+            (x = a \/ MEM x (BETWEEN (VERTICES f) a b)) \/
+            MEM (y,x) (CONSEC (CONS a (APPEND nv [b])))) /\
+         (MEM (x,y) (EDGES (SND (SPLIT_FACE_PAIR f a b nv))) <=>
+            MEM (x,y) (EDGES f) /\
+            (x = b \/ MEM x (BETWEEN (VERTICES f) b a)) \/
+            MEM (x,y) (CONSEC (CONS a (APPEND nv [b]))))`,
+  REWRITE_TAC[FORALL_FACE_THM; VERTICES] THEN REPEAT GEN_TAC THEN
+  STRIP_TAC THEN
+  MP_TAC(ISPECL [`FACE vs t`; `a:num`; `b:num`; `nv:num list`]
+    SPLIT_FACE_PAIR_DISTINCT) THEN
+  ASM_REWRITE_TAC[VERTICES; SPLIT_FACE_PAIR_VERTICES] THEN
+  REWRITE_TAC[APPEND; GSYM APPEND_ASSOC] THEN STRIP_TAC THEN
+  MP_TAC(ISPECL [`vs:num list`; `a:num`; `b:num`] ARC_DECOMP_PROPS) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN(ASSUME_TAC o CONJUNCT1) THEN
+  MP_TAC(ISPECL [`vs:num list`; `t:facetype`; `a:num`; `b:num`; `x:num`;
+                 `y:num`] ARC_EDGES) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN SUBST1_TAC THEN
+  REWRITE_TAC[SPLIT_FACE_PAIR_EXEC; VERTICES; APPEND; GSYM APPEND_ASSOC] THEN
+  MP_TAC(ISPECL [`a:num`; `b:num`; `BETWEEN (vs:num list) a b`;
+                 `BETWEEN (vs:num list) b a`; `nv:num list`; `x:num`;
+                 `y:num`] EDGES_PIECE1) THEN
+  MP_TAC(ISPECL [`a:num`; `b:num`; `BETWEEN (vs:num list) a b`;
+                 `BETWEEN (vs:num list) b a`; `nv:num list`; `x:num`;
+                 `y:num`] EDGES_PIECE2) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN SUBST1_TAC THEN
+  DISCH_THEN SUBST1_TAC THEN REWRITE_TAC[]);;
+
+(* An edge of f is never an edge of the path a, nv, b or of its reverse,    *)
+(* unless nv = [] and the chord (a,b) or (b,a) is already an edge of f.     *)
+
+let PATH_NOT_EDGE = prove
+ (`!f a b nv x y.
+     DISTINCT (VERTICES f) /\ MEM a (VERTICES f) /\ MEM b (VERTICES f) /\
+     ~(a = b) /\ (!x. MEM x nv ==> ~MEM x (VERTICES f)) /\
+     (nv = [] ==> ~(b = NEXT_VERTEX f a) /\ ~(a = NEXT_VERTEX f b)) /\
+     MEM (x,y) (EDGES f)
+     ==> ~MEM (x,y) (CONSEC (CONS a (APPEND nv [b]))) /\
+         ~MEM (y,x) (CONSEC (CONS a (APPEND nv [b])))`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[MEM_EDGES] THEN STRIP_TAC THEN
+  SUBGOAL_THEN
+   `MEM (y:num) (VERTICES f) /\ ~(b:num = a) /\
+    ~MEM (a:num) nv /\ ~MEM (b:num) nv /\ ~MEM (x:num) nv /\ ~MEM (y:num) nv`
+  STRIP_ASSUME_TAC THENL [ASM_MESON_TAC[NEXT_VERTEX_MEM]; ALL_TAC] THEN
+  CONJ_TAC THEN DISCH_TAC THENL
+   [SUBGOAL_THEN `x:num = a` SUBST_ALL_TAC THENL
+     [MP_TAC(ISPECL [`CONS (a:num) nv`; `x:num`; `y:num`; `b:num`]
+        MEM_CONSEC_FST_IMP) THEN
+      ASM_REWRITE_TAC[APPEND; MEM] THEN ASM_MESON_TAC[];
+      ALL_TAC] THEN
+    MP_TAC(ISPECL [`[]:num list`; `a:num`; `nv:num list`; `b:num`; `y:num`]
+      MEM_CONSEC_FST_LAST) THEN
+    ASM_REWRITE_TAC[APPEND; MEM; HD_APPEND; HD] THEN
+    COND_CASES_TAC THEN ASM_MESON_TAC[MEM_HD];
+    SUBGOAL_THEN `x:num = b` SUBST_ALL_TAC THENL
+     [MP_TAC(ISPECL [`APPEND nv [b:num]`; `a:num`; `y:num`; `x:num`]
+        MEM_CONSEC_SND_IMP) THEN
+      ASM_REWRITE_TAC[MEM_APPEND; MEM] THEN ASM_MESON_TAC[];
+      ALL_TAC] THEN
+    MP_TAC(ISPECL [`CONS (a:num) nv`; `b:num`; `[]:num list`; `y:num`]
+      MEM_CONSEC_SND_DISTINCT) THEN
+    ASM_REWRITE_TAC[APPEND; MEM; NOT_CONS_NIL; LAST] THEN
+    COND_CASES_TAC THEN ASM_MESON_TAC[MEM_LAST_NONNIL]]);;
+
+(* every edge of f is an edge of exactly one piece, pieces share no edge;   *)
+(* EXTRA HYPOTHESIS (see the header): for a split without new vertices a    *)
+(* and b must not be adjacent on f.                                          *)
+
+let EDGES_SPLIT_FACE_PAIR_COVER = prove
+ (`!f a b nv x y.
+     DISTINCT (VERTICES f) /\ MEM a (VERTICES f) /\ MEM b (VERTICES f) /\
+     ~(a = b) /\ DISTINCT nv /\ (!x. MEM x nv ==> ~MEM x (VERTICES f)) /\
+     (nv = [] ==> ~(b = NEXT_VERTEX f a) /\ ~(a = NEXT_VERTEX f b)) /\
+     MEM (x,y) (EDGES f)
+     ==> (MEM (x,y) (EDGES (FST (SPLIT_FACE_PAIR f a b nv))) <=>
+          ~MEM (x,y) (EDGES (SND (SPLIT_FACE_PAIR f a b nv))))`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  MP_TAC(ISPECL [`f:face`; `a:num`; `b:num`; `nv:num list`; `x:num`; `y:num`]
+    PATH_NOT_EDGE) THEN
+  ASM_REWRITE_TAC[] THEN STRIP_TAC THEN
+  MP_TAC(ISPECL [`f:face`; `a:num`; `b:num`; `nv:num list`; `x:num`; `y:num`]
+    EDGES_SPLIT_FACE_PAIR) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN(CONJUNCTS_THEN SUBST1_TAC) THEN
+  SUBGOAL_THEN `MEM (x:num) (VERTICES f)` ASSUME_TAC THENL
+   [ASM_MESON_TAC[MEM_EDGES]; ALL_TAC] THEN
+  MP_TAC(ISPECL [`VERTICES f`; `a:num`; `b:num`; `x:num`]
+    MEM_BETWEEN_CASES) THEN
+  MP_TAC(ISPECL [`VERTICES f`; `a:num`; `b:num`; `x:num`]
+    MEM_BETWEEN_DISTINCT) THEN
+  MP_TAC(ISPECL [`VERTICES f`; `b:num`; `a:num`; `x:num`]
+    MEM_BETWEEN_DISTINCT) THEN
+  ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[]);;
+
+let EDGES_SPLIT_FACE_PAIR_DISJOINT = prove
+ (`!f a b nv e.
+     DISTINCT (VERTICES f) /\ MEM a (VERTICES f) /\ MEM b (VERTICES f) /\
+     ~(a = b) /\ DISTINCT nv /\ (!x. MEM x nv ==> ~MEM x (VERTICES f)) /\
+     (nv = [] ==> ~(b = NEXT_VERTEX f a) /\ ~(a = NEXT_VERTEX f b)) /\
+     MEM e (EDGES (FST (SPLIT_FACE_PAIR f a b nv)))
+     ==> ~MEM e (EDGES (SND (SPLIT_FACE_PAIR f a b nv)))`,
+  REWRITE_TAC[FORALL_PAIR_THM] THEN
+  MAP_EVERY X_GEN_TAC
+   [`f:face`; `a:num`; `b:num`; `nv:num list`; `x:num`; `y:num`] THEN
+  STRIP_TAC THEN
+  UNDISCH_TAC `MEM (x:num,y:num) (EDGES (FST (SPLIT_FACE_PAIR f a b nv)))` THEN
+  MP_TAC(ISPECL [`f:face`; `a:num`; `b:num`; `nv:num list`; `x:num`; `y:num`]
+    EDGES_SPLIT_FACE_PAIR) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN(CONJUNCTS_THEN SUBST1_TAC) THEN
+  ASM_CASES_TAC `MEM (x:num,y:num) (EDGES f)` THEN ASM_REWRITE_TAC[] THENL
+   [MP_TAC(ISPECL [`f:face`; `a:num`; `b:num`; `nv:num list`; `x:num`; `y:num`]
+      PATH_NOT_EDGE) THEN
+    ASM_REWRITE_TAC[] THEN STRIP_TAC THEN ASM_REWRITE_TAC[] THEN
+    SUBGOAL_THEN `MEM (x:num) (VERTICES f)` ASSUME_TAC THENL
+     [ASM_MESON_TAC[MEM_EDGES]; ALL_TAC] THEN
+    MP_TAC(ISPECL [`VERTICES f`; `a:num`; `b:num`; `x:num`]
+      MEM_BETWEEN_DISTINCT) THEN
+    MP_TAC(ISPECL [`VERTICES f`; `b:num`; `a:num`; `x:num`]
+      MEM_BETWEEN_DISTINCT) THEN
+    ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[];
+    DISCH_TAC THEN MATCH_MP_TAC CONSEC_ANTISYM THEN
+    ASM_REWRITE_TAC[DISTINCT; DISTINCT_APPEND; MEM_APPEND; MEM] THEN
+    ASM_MESON_TAC[]]);;
+
+(* the successor of a vertex of the second piece other than a and the new   *)
+(* vertices is its successor in f                                           *)
+
+let NEXT_VERTEX_SND_PIECE = prove
+ (`!f a b nv x.
+     DISTINCT (VERTICES f) /\ MEM a (VERTICES f) /\ MEM b (VERTICES f) /\
+     ~(a = b) /\ DISTINCT nv /\ (!x. MEM x nv ==> ~MEM x (VERTICES f)) /\
+     (MEM x (BETWEEN (VERTICES f) b a) \/ x = b)
+     ==> NEXT_VERTEX (SND (SPLIT_FACE_PAIR f a b nv)) x = NEXT_VERTEX f x`,
+  REPEAT GEN_TAC THEN DISCH_THEN(REPEAT_TCL CONJUNCTS_THEN ASSUME_TAC) THEN
+  MP_TAC(ISPECL [`VERTICES f`; `b:num`; `a:num`; `x:num`]
+    MEM_BETWEEN_DISTINCT) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_TAC THEN
+  SUBGOAL_THEN `MEM (x:num) (VERTICES f) /\ ~(x = a)` STRIP_ASSUME_TAC THENL
+   [ASM_MESON_TAC[]; ALL_TAC] THEN
+  ABBREV_TAC `z = NEXT_VERTEX (SND (SPLIT_FACE_PAIR f a b nv)) x` THEN
+  SUBGOAL_THEN `MEM (x:num,z:num) (EDGES (SND (SPLIT_FACE_PAIR f a b nv)))`
+  MP_TAC THENL
+   [EXPAND_TAC "z" THEN
+    REWRITE_TAC[MEM_EDGES; SPLIT_FACE_PAIR_VERTICES; MEM_APPEND; MEM] THEN
+    ASM_MESON_TAC[];
+    ALL_TAC] THEN
+  MP_TAC(ISPECL [`f:face`; `a:num`; `b:num`; `nv:num list`; `x:num`; `z:num`]
+    EDGES_SPLIT_FACE_PAIR) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN(SUBST1_TAC o CONJUNCT2) THEN
+  REWRITE_TAC[MEM_EDGES] THEN
+  MP_TAC(ISPECL [`CONS (a:num) nv`; `x:num`; `z:num`; `b:num`]
+    MEM_CONSEC_FST_IMP) THEN
+  REWRITE_TAC[APPEND; MEM] THEN ASM_MESON_TAC[]);;
+end;;

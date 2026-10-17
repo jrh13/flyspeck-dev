@@ -1,0 +1,118 @@
+(* ========================================================================= *)
+(* tame/tame_iso.ml                                                          *)
+(*                                                                           *)
+(* Face graphs and their isomorphism (Isabelle PlaneGraphIso.thy, as         *)
+(* transcribed by Hales in Flyspeck's import_tame_classification.hl): FGRAPH *)
+(* g is the list of vertex lists of the faces; faces are congruent (CONG)    *)
+(* when one is a rotation of the other; a map phi on vertices is a proper    *)
+(* homomorphism of face sets when it maps the congruence classes onto each   *)
+(* other, an isomorphism when moreover injective on the vertices, possibly   *)
+(* after reversing every face of the target (IS_ISO).  ISO_FGRAPH is the     *)
+(* existence of such a phi.                                                  *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_tame.hl";;
+
+module Tg_iso = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+
+let FGRAPH = new_definition
+ `FGRAPH g = MAP VERTICES (FACES g)`;;
+
+let CONG = new_definition
+ `CONG (xs:A list) ys <=> ?n. ys = ROTATE n xs`;;
+
+let CONG_CLASS = new_definition
+ `CONG_CLASS (xs:A list) = {ys | CONG xs ys}`;;
+
+let INJ_ON = new_definition
+ `INJ_ON (phi:A->B) s <=> !x y. x IN s /\ y IN s /\ phi x = phi y ==> x = y`;;
+
+let IS_PR_HOM = new_definition
+ `IS_PR_HOM (phi:A->B) Fs1 Fs2 <=>
+    IMAGE CONG_CLASS (IMAGE (MAP phi) Fs1) = IMAGE CONG_CLASS Fs2`;;
+
+let IS_PR_ISO = new_definition
+ `IS_PR_ISO (phi:A->B) Fs1 Fs2 <=>
+    IS_PR_HOM phi Fs1 Fs2 /\ INJ_ON phi (UNIONS (IMAGE set_of_list Fs1))`;;
+
+let IS_ISO = new_definition
+ `IS_ISO (phi:A->B) Fs1 Fs2 <=>
+    IS_PR_ISO phi Fs1 Fs2 \/ IS_PR_ISO phi Fs1 (IMAGE REVERSE Fs2)`;;
+
+let IS_ISO_LIST = new_definition
+ `IS_ISO_LIST (phi:A->B) fs1 fs2 <=>
+    IS_ISO phi (set_of_list fs1) (set_of_list fs2)`;;
+
+let ISO_FGRAPH = new_definition
+ `ISO_FGRAPH (fs1:(A list)list) (fs2:(B list)list) <=>
+    ?phi. IS_ISO_LIST phi fs1 fs2`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Congruence is an equivalence.                                             *)
+(* ------------------------------------------------------------------------- *)
+
+let CONG_REFL = prove
+ (`!xs:A list. CONG xs xs`,
+  GEN_TAC THEN REWRITE_TAC[CONG] THEN EXISTS_TAC `0` THEN
+  REWRITE_TAC[ROTATE_CLAUSES]);;
+
+let ROTATE_ROTATE = prove
+ (`!m n xs:A list. ROTATE m (ROTATE n xs) = ROTATE (m + n) xs`,
+  REWRITE_TAC[ROTATE; ITER_ADD]);;
+
+let CONG_TRANS = prove
+ (`!xs ys zs:A list. CONG xs ys /\ CONG ys zs ==> CONG xs zs`,
+  REWRITE_TAC[CONG] THEN MESON_TAC[ROTATE_ROTATE]);;
+
+let ROTATE_APPEND_LENGTH = prove
+ (`!xs ys:A list. ROTATE (LENGTH xs) (APPEND xs ys) = APPEND ys xs`,
+  LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[LENGTH; ROTATE_CLAUSES; APPEND; APPEND_NIL; ROTATE1] THEN
+  ASM_REWRITE_TAC[GSYM APPEND_ASSOC; APPEND]);;
+
+let ROTATE_LENGTH = prove
+ (`!xs:A list. ROTATE (LENGTH xs) xs = xs`,
+  GEN_TAC THEN
+  MP_TAC(ISPECL [`xs:A list`; `[]:A list`] ROTATE_APPEND_LENGTH) THEN
+  REWRITE_TAC[APPEND_NIL; APPEND]);;
+
+let ROTATE_MULT_LENGTH = prove
+ (`!k xs:A list. ROTATE (k * LENGTH xs) xs = xs`,
+  INDUCT_TAC THEN REWRITE_TAC[MULT_CLAUSES; ROTATE_CLAUSES] THEN
+  GEN_TAC THEN ONCE_REWRITE_TAC[GSYM ROTATE_ROTATE] THEN
+  ASM_REWRITE_TAC[ROTATE_LENGTH]);;
+
+let ROTATE_NIL = prove
+ (`!n. ROTATE n ([]:A list) = []`,
+  INDUCT_TAC THEN ASM_REWRITE_TAC[ROTATE_CLAUSES; ROTATE1]);;
+
+let CONG_SYM = prove
+ (`!xs ys:A list. CONG xs ys ==> CONG ys xs`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[CONG] THEN
+  DISCH_THEN(X_CHOOSE_THEN `n:num` SUBST1_TAC) THEN
+  ASM_CASES_TAC `LENGTH(xs:A list) = 0` THENL
+   [RULE_ASSUM_TAC(REWRITE_RULE[LENGTH_EQ_NIL]) THEN
+    ASM_REWRITE_TAC[ROTATE_NIL] THEN EXISTS_TAC `0` THEN
+    REWRITE_TAC[ROTATE_NIL];
+    ALL_TAC] THEN
+  EXISTS_TAC `LENGTH(xs:A list) - n MOD LENGTH(xs:A list)` THEN
+  REWRITE_TAC[ROTATE_ROTATE] THEN
+  SUBGOAL_THEN `LENGTH(xs:A list) - n MOD LENGTH xs + n =
+                (n DIV LENGTH xs + 1) * LENGTH xs` SUBST1_TAC THENL
+   [MP_TAC(SPECL [`n:num`; `LENGTH(xs:A list)`] DIVISION) THEN
+    ASM_REWRITE_TAC[] THEN ARITH_TAC;
+    REWRITE_TAC[ROTATE_MULT_LENGTH]]);;
+
+let CONG_LENGTH = prove
+ (`!xs ys:A list. CONG xs ys ==> LENGTH ys = LENGTH xs`,
+  REWRITE_TAC[CONG] THEN MESON_TAC[LENGTH_ROTATE]);;
+
+let CONG_MEM = prove
+ (`!xs ys:A list x. CONG xs ys ==> (MEM x ys <=> MEM x xs)`,
+  REWRITE_TAC[CONG] THEN MESON_TAC[MEM_ROTATE]);;
+end;;

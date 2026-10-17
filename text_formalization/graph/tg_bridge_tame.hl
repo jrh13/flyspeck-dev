@@ -1,0 +1,231 @@
+(* ========================================================================= *)
+(* tame/tame_bridge_tame.ml -- Hales' tameness predicates, fgraph and graph  *)
+(* isomorphism (hales_defs.ml) coincide with ours under HFACE/HGRAPH         *)
+(* (tame_bridge_defs.ml); the vertex-based predicates need FACE_LIST_LEN.    *)
+(* The face-level facts (H_VERTICES, H_FINAL, OFACE_HFACE) and the graph     *)
+(* projections (H_FACES, H_COUNTVERTICES, H_FACESAT) come from               *)
+(* tame_bridge_graph.ml, the list-level ones (H_SUMN, H_MAP, H_UPT, H_CONG,  *)
+(* H_INJ_ON, H_NOT_EQUAL, H_SQUANDER..., H_EXCESSTCOUNT) from                *)
+(* tame_bridge_list.ml.                                                      *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_bridge_graph.hl";;
+
+module Tg_bridge_tame = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+
+(* ------------------------------------------------------------------------- *)
+(* The face graph and the quantifications over faces and vertices.           *)
+(* ------------------------------------------------------------------------- *)
+
+let H_FGRAPH = prove
+ (`!g. fgraph (HGRAPH g) = FGRAPH g`,
+  REWRITE_TAC[h_fgraph; FGRAPH; H_FACES; GSYM MAP_o] THEN
+  REWRITE_TAC[o_DEF; H_VERTICES; ETA_AX]);;
+
+let H_FACES_SET = prove
+ (`!g f. f IN Faces (HGRAPH g) <=> ?f0. MEM f0 (FACES g) /\ f = HFACE f0`,
+  REWRITE_TAC[h_Faces; IN_SET_OF_LIST; H_FACES; MEM_MAP]);;
+
+let H_VERTICES_SET2 = prove
+ (`!g v. v IN vertices_set2 (HGRAPH g) <=> MEM v (VERTICES_GRAPH g)`,
+  REWRITE_TAC[h_vertices_set2; IN_SET_OF_LIST; h_vertices_graph; H_UPT;
+              H_COUNTVERTICES; VERTICES_GRAPH]);;
+
+let H_FORALL_FACES = prove
+ (`!g P. (!f. f IN Faces (HGRAPH g) ==> P f) <=>
+         (!f. MEM f (FACES g) ==> P (HFACE f))`,
+  REWRITE_TAC[H_FACES_SET] THEN MESON_TAC[]);;
+
+(* Under FACE_LIST_LEN every vertex indexes the face list table.             *)
+
+let H_VERTEX_RANGE = prove
+ (`!g v. FACE_LIST_LEN g /\ MEM v (VERTICES_GRAPH g)
+         ==> v < LENGTH (FACE_LIST_AT g)`,
+  SIMP_TAC[FACE_LIST_LEN; MEM_VERTICES_GRAPH]);;
+
+let H_FORALL_VERTICES = prove
+ (`!g P Q. FACE_LIST_LEN g /\
+           (!v. v < LENGTH (FACE_LIST_AT g) ==> (P v <=> Q v))
+           ==> ((!v. v IN vertices_set2 (HGRAPH g) ==> P v) <=>
+                (!v. MEM v (VERTICES_GRAPH g) ==> Q v))`,
+  REWRITE_TAC[H_VERTICES_SET2] THEN MESON_TAC[H_VERTEX_RANGE]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The face counts at a vertex.                                              *)
+(* ------------------------------------------------------------------------- *)
+
+let H_DEGREE = prove
+ (`!g v. v < LENGTH (FACE_LIST_AT g) ==> degree (HGRAPH g) v = DEGREE g v`,
+  SIMP_TAC[h_degree; DEGREE; H_FACESAT; LENGTH_MAP]);;
+
+let H_TRI = prove
+ (`!g v. v < LENGTH (FACE_LIST_AT g) ==> tri (HGRAPH g) v = TRI g v`,
+  SIMP_TAC[h_tri; TRI; H_FACESAT; FILTER_MAP; LENGTH_MAP] THEN
+  REWRITE_TAC[o_DEF; H_FINAL; H_VERTICES]);;
+
+let H_QUAD = prove
+ (`!g v. v < LENGTH (FACE_LIST_AT g) ==> quad (HGRAPH g) v = QUAD g v`,
+  SIMP_TAC[h_quad; QUAD; H_FACESAT; FILTER_MAP; LENGTH_MAP] THEN
+  REWRITE_TAC[o_DEF; H_FINAL; H_VERTICES]);;
+
+let H_EXCEPT = prove
+ (`!g v. v < LENGTH (FACE_LIST_AT g) ==> except (HGRAPH g) v = EXCEPT g v`,
+  SIMP_TAC[h_except; EXCEPT; H_FACESAT; FILTER_MAP; LENGTH_MAP] THEN
+  REWRITE_TAC[o_DEF; H_FINAL; H_VERTICES]);;
+
+let H_VERTEXTYPE = prove
+ (`!g v. v < LENGTH (FACE_LIST_AT g)
+         ==> vertextype (HGRAPH g) v = VERTEX_TYPE g v`,
+  SIMP_TAC[h_vertextype; VERTEX_TYPE; H_TRI; H_QUAD; H_EXCEPT]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The tameness conditions 9a .. 12o.                                        *)
+(* ------------------------------------------------------------------------- *)
+
+let H_TAME9A = prove
+ (`!g. tame9a (HGRAPH g) <=> TAME9A g`,
+  REWRITE_TAC[h_tame9a; TAME9A; H_FORALL_FACES; H_VERTICES]);;
+
+let H_TAME10 = prove
+ (`!g. tame10 (HGRAPH g) <=> TAME10 g`,
+  REWRITE_TAC[h_tame10; TAME10; LET_DEF; LET_END_DEF; H_COUNTVERTICES]);;
+
+let H_TAME11A = prove
+ (`!g. FACE_LIST_LEN g ==> (tame11a (HGRAPH g) <=> TAME11A g)`,
+  REPEAT STRIP_TAC THEN REWRITE_TAC[h_tame11a; TAME11A] THEN
+  MATCH_MP_TAC H_FORALL_VERTICES THEN ASM_SIMP_TAC[H_DEGREE]);;
+
+let H_TAME11B = prove
+ (`!g. FACE_LIST_LEN g ==> (tame11b (HGRAPH g) <=> TAME11B g)`,
+  REPEAT STRIP_TAC THEN REWRITE_TAC[h_tame11b; TAME11B] THEN
+  MATCH_MP_TAC H_FORALL_VERTICES THEN ASM_SIMP_TAC[H_DEGREE; H_EXCEPT]);;
+
+let H_TAME12O = prove
+ (`!g. FACE_LIST_LEN g ==> (tame12o (HGRAPH g) <=> TAME12O g)`,
+  REPEAT STRIP_TAC THEN
+  REWRITE_TAC[h_tame12o; TAME12O; H_NOT_EQUAL; GSYM IMP_IMP] THEN
+  MATCH_MP_TAC H_FORALL_VERTICES THEN
+  ASM_SIMP_TAC[H_DEGREE; H_EXCEPT; H_VERTEXTYPE]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Admissible weights: Hales' w on his faces is our w o HFACE.               *)
+(* ------------------------------------------------------------------------- *)
+
+let H_SUMN_HFACE = prove
+ (`!w l. sumn (MAP w (MAP HFACE l)) = LIST_SUM (w o HFACE) l`,
+  REWRITE_TAC[H_SUMN; LIST_SUM_MAP]);;
+
+let H_TRIANGLE = prove
+ (`triangle o HFACE = TRIANGLE`,
+  REWRITE_TAC[FUN_EQ_THM; o_THM; h_triangle; TRIANGLE; H_VERTICES]);;
+
+let H_ADMISSIBLE1 = prove
+ (`!w g. admissible1 w (HGRAPH g) <=> ADMISSIBLE1 (w o HFACE) g`,
+  REWRITE_TAC[h_admissible1; ADMISSIBLE1; H_FORALL_FACES; H_VERTICES;
+              H_SQUANDERFACE; o_THM]);;
+
+let H_ADMISSIBLE2 = prove
+ (`!w g. FACE_LIST_LEN g
+         ==> (admissible2 w (HGRAPH g) <=> ADMISSIBLE2 (w o HFACE) g)`,
+  REPEAT STRIP_TAC THEN
+  REWRITE_TAC[h_admissible2; ADMISSIBLE2; GSYM IMP_IMP; ETA_AX] THEN
+  MATCH_MP_TAC H_FORALL_VERTICES THEN
+  ASM_SIMP_TAC[H_EXCEPT; H_TRI; H_QUAD; H_FACESAT; H_SUMN_HFACE;
+               H_SQUANDERVERTEX]);;
+
+let H_ADMISSIBLE3 = prove
+ (`!w g. FACE_LIST_LEN g
+         ==> (admissible3 w (HGRAPH g) <=> ADMISSIBLE3 (w o HFACE) g)`,
+  REPEAT STRIP_TAC THEN
+  REWRITE_TAC[h_admissible3; ADMISSIBLE3; GSYM IMP_IMP; ETA_AX; H_MAP; GE;
+              H_EXCESSTCOUNT] THEN
+  MATCH_MP_TAC H_FORALL_VERTICES THEN
+  ASM_SIMP_TAC[H_VERTEXTYPE; H_FACESAT; FILTER_MAP; H_TRIANGLE;
+               H_SUMN_HFACE]);;
+
+let H_ADMISSIBLE = prove
+ (`!w g. FACE_LIST_LEN g
+         ==> (admissible' w (HGRAPH g) <=> ADMISSIBLE (w o HFACE) g)`,
+  SIMP_TAC[h_admissible'; ADMISSIBLE; H_ADMISSIBLE1; H_ADMISSIBLE2;
+           H_ADMISSIBLE3]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Condition 13a: weights are transported back along OFACE.                  *)
+(* ------------------------------------------------------------------------- *)
+
+let H_OFACE_HFACE_O = prove
+ (`!w:face->A. (w o OFACE) o HFACE = w`,
+  REWRITE_TAC[FUN_EQ_THM; o_THM; OFACE_HFACE]);;
+
+let H_TAME13A = prove
+ (`!g. FACE_LIST_LEN g ==> (tame13a (HGRAPH g) <=> TAME13A g)`,
+  REPEAT STRIP_TAC THEN
+  ASM_SIMP_TAC[h_tame13a; TAME13A; H_ADMISSIBLE; H_FACES; ETA_AX;
+               H_SUMN_HFACE; H_SQUANDERTARGET] THEN
+  EQ_TAC THENL
+   [MESON_TAC[];
+    DISCH_THEN(X_CHOOSE_THEN `w:face->num` STRIP_ASSUME_TAC) THEN
+    EXISTS_TAC `(w:face->num) o OFACE` THEN
+    ASM_REWRITE_TAC[H_OFACE_HFACE_O]]);;
+
+let H_TAME = prove
+ (`!g. FACE_LIST_LEN g ==> (tame (HGRAPH g) <=> TAME g)`,
+  SIMP_TAC[h_tame; TAME; H_TAME9A; H_TAME10; H_TAME11A; H_TAME11B;
+           H_TAME12O; H_TAME13A]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Isomorphism of face graphs: __cong xs is the set CONG_CLASS xs, the       *)
+(* infixes //// and #?# are IMAGE.                                           *)
+(* ------------------------------------------------------------------------- *)
+
+let H_CONG_CLASS = prove
+ (`(__cong) = (CONG_CLASS:A list->A list->bool)`,
+  ONCE_REWRITE_TAC[FUN_EQ_THM] THEN GEN_TAC THEN
+  REWRITE_TAC[EXTENSION; CONG_CLASS; IN_ELIM_THM] THEN
+  REWRITE_TAC[IN; H_CONG]);;
+
+let H_IS_PR_HOM = prove
+ (`!(phi:A->B) Fs1 Fs2. is_pr_Hom phi Fs1 Fs2 <=> IS_PR_HOM phi Fs1 Fs2`,
+  REWRITE_TAC[h_is_pr_Hom; IS_PR_HOM; h_EQ_CLASS; h_IMAGE_INFIX;
+              H_CONG_CLASS]);;
+
+let H_IS_PR_ISO = prove
+ (`!(phi:A->B) Fs1 Fs2. is_pr_Iso phi Fs1 Fs2 <=> IS_PR_ISO phi Fs1 Fs2`,
+  REWRITE_TAC[h_is_pr_Iso; IS_PR_ISO; H_IS_PR_HOM; H_INJ_ON; ETA_AX]);;
+
+let H_IS_ISO = prove
+ (`!(phi:A->B) Fs1 Fs2. is_Iso phi Fs1 Fs2 <=> IS_ISO phi Fs1 Fs2`,
+  REWRITE_TAC[h_is_Iso; IS_ISO; H_IS_PR_ISO; h_IMAGE_INFIX]);;
+
+let H_IS_ISO_LIST = prove
+ (`!(phi:A->B) fs1 fs2. is_iso phi fs1 fs2 <=> IS_ISO_LIST phi fs1 fs2`,
+  REWRITE_TAC[h_is_iso; IS_ISO_LIST; H_IS_ISO]);;
+
+let H_ISO_FGRAPH = prove
+ (`!(fs1:(A list)list) (fs2:(B list)list).
+        iso_fgraph fs1 fs2 <=> ISO_FGRAPH fs1 fs2`,
+  REWRITE_TAC[h_iso_fgraph; ISO_FGRAPH; H_IS_ISO_LIST]);;
+end;;

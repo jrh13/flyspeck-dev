@@ -1,0 +1,121 @@
+(* ========================================================================= *)
+(* tame/tame_newverts.ml                                                     *)
+(*                                                                           *)
+(* The vertex count of a subdivided graph is the parent's count plus the     *)
+(* number of new vertices determined by the vertex option list alone         *)
+(* (NEW_VERTS): a successor exceeding 15 vertices can therefore be pruned    *)
+(* without constructing it.  POLY_VLISTS is the list of vertex option lists  *)
+(* of a polygon size, GENERATE_POLYGON being MAP (SUBDIV_FACE g f) of it,   *)
+(* and the driver can decide per list whether to construct the successor.    *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_mono.hl";;
+flyspeck_needs "graph/tg_lbthm.hl";;
+
+module Tg_newverts = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+
+let NEW_VERTS = define
+ `NEW_VERTS n [] = 0 /\
+  NEW_VERTS n (CONS NONE vos) = NEW_VERTS (SUC n) vos /\
+  NEW_VERTS n (CONS (SOME (v:num)) vos) = n + NEW_VERTS 0 vos`;;
+
+let COUNT_VERTICES_SPLIT_FACE = prove
+ (`!g ram1 ram2 oldF newVs.
+     COUNT_VERTICES (SND (SND (SPLIT_FACE g ram1 ram2 oldF newVs))) =
+     COUNT_VERTICES g + LENGTH newVs`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[SPLIT_FACE] THEN
+  REWRITE_TAC[LET_ELIM_THM; COUNT_VERTICES]);;
+
+let COUNT_VERTICES_MAKE_FACE_FINAL = prove
+ (`!f g. COUNT_VERTICES (MAKE_FACE_FINAL f g) = COUNT_VERTICES g`,
+  REWRITE_TAC[MAKE_FACE_FINAL; COUNT_VERTICES]);;
+
+let COUNT_VERTICES_SUBDIV_FACE_REC = prove
+ (`!vos g f u n. COUNT_VERTICES (SUBDIV_FACE_REC vos g f u n) =
+                 COUNT_VERTICES g + NEW_VERTS n vos`,
+  LIST_INDUCT_TAC THENL
+   [REWRITE_TAC[SUBDIV_FACE_REC_CLAUSES; NEW_VERTS;
+                COUNT_VERTICES_MAKE_FACE_FINAL; ADD_CLAUSES];
+    ALL_TAC] THEN
+  REPEAT GEN_TAC THEN
+  STRUCT_CASES_TAC(ISPEC `h:num option` (cases "option")) THEN
+  ASM_REWRITE_TAC[SUBDIV_FACE_REC_CLAUSES; NEW_VERTS] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[LET_ELIM_THM] THENL
+   [FIRST_X_ASSUM(CONJUNCTS_THEN2 ASSUME_TAC SUBST1_TAC) THEN
+    REWRITE_TAC[ADD_CLAUSES];
+    REWRITE_TAC[COUNT_VERTICES_SPLIT_FACE; LENGTH_UPT] THEN ARITH_TAC]);;
+
+let COUNT_VERTICES_SUBDIV_FACE = prove
+ (`!g f vos. COUNT_VERTICES (SUBDIV_FACE g f vos) =
+             COUNT_VERTICES g + NEW_VERTS 0 (TL vos)`,
+  REWRITE_TAC[SUBDIV_FACE; COUNT_VERTICES_SUBDIV_FACE_REC]);;
+
+let TFO_VCOUNT_VLIST = prove
+ (`!arch p g f vos.
+     15 < COUNT_VERTICES g + NEW_VERTS 0 (TL vos)
+     ==> TFO arch p (SUBDIV_FACE g f vos)`,
+  REPEAT STRIP_TAC THEN MATCH_MP_TAC TFO_VCOUNT_PROVED THEN
+  ASM_REWRITE_TAC[COUNT_VERTICES_SUBDIV_FACE]);;
+
+let POLY_VLISTS = new_definition
+ `POLY_VLISTS n v f g =
+    MAP (INDEX_TO_VERTEX_LIST f v)
+        (FILTER (\is. ~CONTAINS_DUPLICATE_EDGE g f v is)
+                (ENUMERATOR n (LENGTH(VERTICES f))))`;;
+
+let GENERATE_POLYGON_VLISTS = prove
+ (`!n v f g.
+    GENERATE_POLYGON n v f g = MAP (SUBDIV_FACE g f) (POLY_VLISTS n v f g)`,
+  REWRITE_TAC[GENERATE_POLYGON_EXEC; POLY_VLISTS]);;
+
+(* The driver's composition over the vertex option lists of a size.         *)
+
+let TFO_VLISTS = prove
+ (`!arch p g f vls l.
+     ALL (\vl. TFO arch p (SUBDIV_FACE g f vl)) vls /\
+     l = MAP (SUBDIV_FACE g f) vls
+     ==> !g'. MEM g' l ==> TFO arch p g'`,
+  REPEAT GEN_TAC THEN DISCH_THEN(CONJUNCTS_THEN2 MP_TAC SUBST1_TAC) THEN
+  REWRITE_TAC[GSYM ALL_MEM; MEM_MAP] THEN MESON_TAC[]);;
+
+(* The executable test used by the driver.                                   *)
+
+let VCOUNT_PRUNED_VL = new_definition
+ `VCOUNT_PRUNED_VL g vos <=> 15 < COUNT_VERTICES g + NEW_VERTS 0 (TL vos)`;;
+
+let TFO_VCOUNT_PRUNED_VL = prove
+ (`!arch p g f vos.
+    VCOUNT_PRUNED_VL g vos ==> TFO arch p (SUBDIV_FACE g f vos)`,
+  REWRITE_TAC[VCOUNT_PRUNED_VL; TFO_VCOUNT_VLIST]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The well-formedness check on the chosen face that the polygon-size        *)
+(* pruning lemma TFO_SIZE_CHECKED (tame_lbthm.ml) needs.                     *)
+(* ------------------------------------------------------------------------- *)
+
+let MINFACE_WF = new_definition
+ `MINFACE_WF g f <=>
+    DISTINCT (VERTICES f) /\ 3 <= LENGTH (VERTICES f) /\
+    ALL (\x. x < COUNT_VERTICES g) (VERTICES f)`;;
+
+let TFO_SIZE_WF_EQ = prove
+ (`!arch p g cs i fs f v.
+     FACE_LIST_LEN g /\ LB_CERT_OK g cs /\ SIZE_PRUNED g cs i /\ 3 <= i /\
+     NON_FINALS g = fs /\ ~NULL fs /\ MINIMAL_FACE fs = f /\
+     MINIMAL_VERTEX g f = v /\ MINFACE_WF g f
+     ==> !g'. MEM g' (GENERATE_POLYGON i v f g) ==> TFO arch p g'`,
+  REWRITE_TAC[MINFACE_WF] THEN REPEAT GEN_TAC THEN STRIP_TAC THEN
+  MATCH_MP_TAC TFO_SIZE_CHECKED THEN ASM_MESON_TAC[]);;
+end;;

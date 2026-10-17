@@ -1,0 +1,299 @@
+(* ========================================================================= *)
+(* tame/tame_exec.ml                                                         *)
+(*                                                                           *)
+(* Executable clause forms of the specification functions, for the           *)
+(* proof-producing evaluator (compute-hol-light eval_compile): recursion on  *)
+(* numbers by `if n = 0 ... (n - 1)` instead of SUC patterns, no `let`, and  *)
+(* equality tests on the datatypes.  Every theorem here is proved from the   *)
+(* specification definitions; nothing is redefined.                          *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_iso.hl";;
+
+module Tg_exec = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+
+(* ------------------------------------------------------------------------- *)
+(* Eliminating let, also with pair and triple patterns.                      *)
+(* ------------------------------------------------------------------------- *)
+
+let LET_ELIM_THM = prove
+ (`(!(P:A->D) (e:A). (let x = e in P x) = P e) /\
+   (!(P:A->B->D) (e:A#B). (let x,y = e in P x y) = P (FST e) (SND e)) /\
+   (!(P:A->B->C->D) (e:A#B#C).
+        (let x,y,z = e in P x y z) = P (FST e) (FST(SND e)) (SND(SND e)))`,
+  REWRITE_TAC[FORALL_PAIR_THM; LET_DEF; LET_END_DEF]);;
+
+let NULL_EQ_NIL = prove
+ (`!l:A list. NULL l <=> l = []`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[NULL; NOT_CONS_NIL]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Core list and number functions in NUM form.                               *)
+(* ------------------------------------------------------------------------- *)
+
+let EL_EXEC = prove
+ (`!n l:A list. EL n l = if n = 0 then HD l else EL (n - 1) (TL l)`,
+  REPEAT GEN_TAC THEN
+  STRUCT_CASES_TAC(SPEC `n:num` num_CASES) THEN
+  REWRITE_TAC[EL; NOT_SUC; SUC_SUB1]);;
+
+let REPLICATE_EXEC = prove
+ (`!n x:A. REPLICATE n x = if n = 0 then [] else CONS x (REPLICATE (n - 1) x)`,
+  REPEAT GEN_TAC THEN
+  STRUCT_CASES_TAC(SPEC `n:num` num_CASES) THEN
+  REWRITE_TAC[REPLICATE; NOT_SUC; SUC_SUB1]);;
+
+let ITER_EXEC = prove
+ (`!n f x:A. ITER n f x = if n = 0 then x else ITER (n - 1) f (f x)`,
+  REPEAT GEN_TAC THEN
+  STRUCT_CASES_TAC(SPEC `n:num` num_CASES) THEN
+  REWRITE_TAC[ITER; ITER_ALT; NOT_SUC; SUC_SUB1]);;
+
+let UPT_REC_EXEC = prove
+ (`!n i. UPT_REC n i = if n = 0 then [] else CONS i (UPT_REC (n - 1) (SUC i))`,
+  REPEAT GEN_TAC THEN
+  STRUCT_CASES_TAC(SPEC `n:num` num_CASES) THEN
+  REWRITE_TAC[UPT_REC; NOT_SUC; SUC_SUB1]);;
+
+let ROTATE_EXEC = prove
+ (`!n xs:A list.
+     ROTATE n xs = if n = 0 then xs else ROTATE (n - 1) (ROTATE1 xs)`,
+  REPEAT GEN_TAC THEN
+  STRUCT_CASES_TAC(SPEC `n:num` num_CASES) THEN
+  REWRITE_TAC[ROTATE_CLAUSES; NOT_SUC; SUC_SUB1]);;
+
+let LAST_EXEC = prove
+ (`!h t:A list. LAST (CONS h t) = if NULL t then h else LAST t`,
+  REWRITE_TAC[LAST] THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[NULL; NOT_CONS_NIL]);;
+
+let NULL_EXEC = prove
+ (`NULL ([]:A list) = T /\ (!h t:A list. NULL (CONS h t) = F)`,
+  REWRITE_TAC[NULL]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Equality on the datatypes.                                                *)
+(* ------------------------------------------------------------------------- *)
+
+let FACETYPE_EQ_EXEC = prove
+ (`(Final = Final <=> T) /\ (Nonfinal = Nonfinal <=> T) /\
+   (Final = Nonfinal <=> F) /\ (Nonfinal = Final <=> F)`,
+  REWRITE_TAC[FACETYPE_DISTINCT]);;
+
+let FACE_EQ_EXEC = prove
+ (`!vs t vs' t'. FACE vs t = FACE vs' t' <=> vs = vs' /\ t = t'`,
+  REWRITE_TAC[FACE_INJ]);;
+
+(* ------------------------------------------------------------------------- *)
+(* let-free forms of the list helpers.                                       *)
+(* ------------------------------------------------------------------------- *)
+
+let BETWEEN_EXEC = PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] BETWEEN;;
+
+let MINIMAL_EL_EXEC = PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] MINIMAL_EL;;
+
+(* ------------------------------------------------------------------------- *)
+(* Graph operations.                                                         *)
+(* ------------------------------------------------------------------------- *)
+
+let NEXT_VERTEX_EXEC = prove
+ (`!vs t v. NEXT_VERTEX (FACE vs t) v = NEXT_ELEM vs (HD vs) v`,
+  REWRITE_TAC[NEXT_VERTEX; VERTICES; LET_DEF; LET_END_DEF]);;
+
+let NEXT_VERTICES_EXEC = prove
+ (`!f n v. NEXT_VERTICES f n v =
+           if n = 0 then v else NEXT_VERTICES f (n - 1) (NEXT_VERTEX f v)`,
+  REWRITE_TAC[NEXT_VERTICES] THEN REPEAT GEN_TAC THEN
+  GEN_REWRITE_TAC LAND_CONV [ITER_EXEC] THEN REWRITE_TAC[]);;
+
+let SEED_GRAPH_EXEC = prove
+ (`!n. SEED_GRAPH n =
+       GRAPH [FACE (UPT 0 n) Final; FACE (REVERSE (UPT 0 n)) Nonfinal] n
+             (REPLICATE n [FACE (UPT 0 n) Final;
+                           FACE (REVERSE (UPT 0 n)) Nonfinal])
+             (REPLICATE n 0)`,
+  REWRITE_TAC[SEED_GRAPH; LET_DEF; LET_END_DEF]);;
+
+let FINAL_GRAPH_EXEC = prove
+ (`!g. FINAL_GRAPH g <=> ALL FINAL_FACE (FACES g)`,
+  REWRITE_TAC[FINAL_GRAPH_ALL]);;
+
+let TAME10_EXEC = prove
+ (`!g. TAME10 g <=> 13 <= COUNT_VERTICES g /\ COUNT_VERTICES g <= 15`,
+  REWRITE_TAC[TAME10; LET_DEF; LET_END_DEF]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Face division without let.                                                *)
+(* ------------------------------------------------------------------------- *)
+
+let SPLIT_FACE_PAIR_EXEC =
+  PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] SPLIT_FACE_PAIR;;
+
+let SPLIT_FACE_EXEC = PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] SPLIT_FACE;;
+
+let SUBDIV_FACE_REC_EXEC =
+  PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] SUBDIV_FACE_REC_CLAUSES;;
+
+let GENERATE_POLYGON_EXEC = prove
+ (`!n v f g.
+     GENERATE_POLYGON n v f g =
+       MAP (SUBDIV_FACE g f)
+           (MAP (INDEX_TO_VERTEX_LIST f v)
+                (FILTER (\is. ~CONTAINS_DUPLICATE_EDGE g f v is)
+                        (ENUMERATOR n (LENGTH(VERTICES f)))))`,
+  REWRITE_TAC[GENERATE_POLYGON; LET_DEF; LET_END_DEF]);;
+
+let ENUMERATOR_EXEC = PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] ENUMERATOR;;
+
+let NEXT_PLANE_EXEC = prove
+ (`!p g. NEXT_PLANE p g =
+         let fs = NON_FINALS g in
+         if NULL fs then []
+         else let f = MINIMAL_FACE fs in
+              let v = MINIMAL_VERTEX g f in
+              FLAT (MAP (\i. GENERATE_POLYGON i v f g)
+                        (UPT 3 (SUC(MAX_GON p))))`,
+  REWRITE_TAC[NEXT_PLANE; LET_DEF; LET_END_DEF; NULL_EQ_NIL]);;
+
+let NEXT_PLANE_EXEC' =
+  PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] NEXT_PLANE_EXEC;;
+
+(* ------------------------------------------------------------------------- *)
+(* Fused forms for evaluation (proved equal to the specification functions). *)
+(* ------------------------------------------------------------------------- *)
+
+(* Update one position of a list in a single pass.                          *)
+
+let UPDATE_AT = define
+ `UPDATE_AT [] n (h:A->A) = [] /\
+  UPDATE_AT (CONS x xs) n h =
+    if n = 0 then CONS (h x) xs else CONS x (UPDATE_AT xs (n - 1) h)`;;
+
+let UPDATE_AT_LIST_UPDATE = prove
+ (`!xs n f:A->A.
+     UPDATE_AT xs n f =
+       if n < LENGTH xs then LIST_UPDATE xs n (f (EL n xs)) else xs`,
+  LIST_INDUCT_TAC THENL [REWRITE_TAC[UPDATE_AT; LENGTH; LT]; ALL_TAC] THEN
+  REWRITE_TAC[UPDATE_AT; LENGTH] THEN REPEAT GEN_TAC THEN
+  STRUCT_CASES_TAC(SPEC `n:num` num_CASES) THEN
+  ASM_REWRITE_TAC[LIST_UPDATE; EL; HD; TL; NOT_SUC; SUC_SUB1; LT_0;
+                  LT_SUC] THEN
+  COND_CASES_TAC THEN REWRITE_TAC[]);;
+
+let MAP_AT_EXEC = prove
+ (`(!h:A->A xs. MAP_AT [] h xs = xs) /\
+   (!n ns h:A->A xs.
+      MAP_AT (CONS n ns) h xs = MAP_AT ns h (UPDATE_AT xs n h))`,
+  REWRITE_TAC[MAP_AT; UPDATE_AT_LIST_UPDATE] THEN REPEAT GEN_TAC THEN
+  COND_CASES_TAC THEN REWRITE_TAC[]);;
+
+(* Splitting at an element without the quadratic accumulator.               *)
+
+let SPLIT_AT_LIN = define
+ `SPLIT_AT_LIN (c:A) [] = ([],[]) /\
+  SPLIT_AT_LIN c (CONS a rs) =
+    if a = c then ([],rs)
+    else let pr = SPLIT_AT_LIN c rs in (CONS a (FST pr), SND pr)`;;
+
+let SPLIT_AT_REC_LIN = prove
+ (`!l c:A bs. SPLIT_AT_REC c bs l =
+              (APPEND bs (FST (SPLIT_AT_LIN c l)), SND (SPLIT_AT_LIN c l))`,
+  LIST_INDUCT_TAC THEN
+  REWRITE_TAC[SPLIT_AT_REC; SPLIT_AT_LIN; APPEND_NIL] THEN
+  REPEAT GEN_TAC THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[APPEND_NIL; LET_DEF; LET_END_DEF] THEN
+  REWRITE_TAC[GSYM APPEND_ASSOC; APPEND]);;
+
+let SPLIT_AT_EXEC = prove
+ (`!c:A l. SPLIT_AT c l = SPLIT_AT_LIN c l`,
+  REWRITE_TAC[SPLIT_AT; SPLIT_AT_REC_LIN; APPEND; PAIR]);;
+
+let SPLIT_AT_LIN_EXEC = PURE_REWRITE_RULE[LET_DEF; LET_END_DEF] SPLIT_AT_LIN;;
+
+(* Face sizes by the shape of the vertex list.                              *)
+
+let IS_LEN3 = define
+ `IS_LEN3 ([]:A list) = F /\ IS_LEN3 [a] = F /\ IS_LEN3 [a;b] = F /\
+  IS_LEN3 [a;b;c] = T /\ IS_LEN3 (CONS a (CONS b (CONS c (CONS d t)))) = F`;;
+
+let IS_LEN4 = define
+ `IS_LEN4 ([]:A list) = F /\ IS_LEN4 [a] = F /\ IS_LEN4 [a;b] = F /\
+  IS_LEN4 [a;b;c] = F /\ IS_LEN4 [a;b;c;d] = T /\
+  IS_LEN4 (CONS a (CONS b (CONS c (CONS d (CONS e t))))) = F`;;
+
+let IS_LEN_GE5 = define
+ `IS_LEN_GE5 ([]:A list) = F /\ IS_LEN_GE5 [a] = F /\ IS_LEN_GE5 [a;b] = F /\
+  IS_LEN_GE5 [a;b;c] = F /\ IS_LEN_GE5 [a;b;c;d] = F /\
+  IS_LEN_GE5 (CONS a (CONS b (CONS c (CONS d (CONS e t))))) = T`;;
+
+let SQF = define
+ `SQF ([]:A list) = 15410 /\ SQF [a] = 15410 /\ SQF [a;b] = 15410 /\
+  SQF [a;b;c] = 0 /\ SQF [a;b;c;d] = 2058 /\ SQF [a;b;c;d;e] = 4819 /\
+  SQF [a;b;c;d;e;f] = 7120 /\
+  SQF (CONS a (CONS b (CONS c (CONS d (CONS e (CONS f (CONS g t))))))) =
+  15410`;;
+
+let SHAPE_STEP_TAC ths =
+  POP_ASSUM(K ALL_TAC) THEN SPEC_TAC(`t:A list`,`t:A list`) THEN
+  LIST_INDUCT_TAC THEN REWRITE_TAC ths;;
+
+let IS_LEN3_LENGTH = prove
+ (`!l:A list. IS_LEN3 l <=> LENGTH l = 3`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[IS_LEN3; LENGTH; ARITH] THEN
+  REPLICATE_TAC 3 (SHAPE_STEP_TAC [IS_LEN3; LENGTH; ARITH]) THEN
+  REWRITE_TAC[ARITH_RULE `~(SUC(SUC(SUC(SUC n))) = 3)`]);;
+
+let IS_LEN4_LENGTH = prove
+ (`!l:A list. IS_LEN4 l <=> LENGTH l = 4`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[IS_LEN4; LENGTH; ARITH] THEN
+  REPLICATE_TAC 4 (SHAPE_STEP_TAC [IS_LEN4; LENGTH; ARITH]) THEN
+  REWRITE_TAC[ARITH_RULE `~(SUC(SUC(SUC(SUC(SUC n)))) = 4)`]);;
+
+let IS_LEN_GE5_LENGTH = prove
+ (`!l:A list. IS_LEN_GE5 l <=> 5 <= LENGTH l`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[IS_LEN_GE5; LENGTH; ARITH] THEN
+  REPLICATE_TAC 4 (SHAPE_STEP_TAC [IS_LEN_GE5; LENGTH; ARITH]) THEN
+  REWRITE_TAC[ARITH_RULE `5 <= SUC(SUC(SUC(SUC(SUC n))))`]);;
+
+let SQF_SQUANDER_FACE = prove
+ (`!l:A list. SQF l = SQUANDER_FACE (LENGTH l)`,
+  LIST_INDUCT_TAC THEN
+  REWRITE_TAC[SQF; LENGTH; SQUANDER_FACE; SQUANDER_TARGET; ARITH] THEN
+  REPLICATE_TAC 6
+    (SHAPE_STEP_TAC [SQF; LENGTH; SQUANDER_FACE; SQUANDER_TARGET; ARITH]) THEN
+  REWRITE_TAC[ARITH_RULE `~(SUC(SUC(SUC(SUC(SUC(SUC(SUC n)))))) = 3) /\
+                          ~(SUC(SUC(SUC(SUC(SUC(SUC(SUC n)))))) = 4) /\
+                          ~(SUC(SUC(SUC(SUC(SUC(SUC(SUC n)))))) = 5) /\
+                          ~(SUC(SUC(SUC(SUC(SUC(SUC(SUC n)))))) = 6)`]);;
+
+let TRI_EXEC = prove
+ (`!g v. TRI g v = LENGTH(FILTER (\f. FINAL_FACE f /\ IS_LEN3 (VERTICES f))
+                                 (FACES_AT g v))`,
+  REWRITE_TAC[TRI; IS_LEN3_LENGTH]);;
+
+let QUAD_EXEC = prove
+ (`!g v. QUAD g v = LENGTH(FILTER (\f. FINAL_FACE f /\ IS_LEN4 (VERTICES f))
+                                  (FACES_AT g v))`,
+  REWRITE_TAC[QUAD; IS_LEN4_LENGTH]);;
+
+let EXCEPT_EXEC = prove
+ (`!g v. EXCEPT g v =
+         LENGTH(FILTER (\f. FINAL_FACE f /\ IS_LEN_GE5 (VERTICES f))
+                       (FACES_AT g v))`,
+  REWRITE_TAC[EXCEPT; IS_LEN_GE5_LENGTH]);;
+
+let TRIANGLE_EXEC = prove
+ (`!f. TRIANGLE f <=> IS_LEN3 (VERTICES f)`,
+  REWRITE_TAC[TRIANGLE; IS_LEN3_LENGTH]);;
+
+let FACE_SQUANDER_LOWER_BOUND_EXEC = prove
+ (`!g. FACE_SQUANDER_LOWER_BOUND g =
+       LIST_SUM (\f. SQF (VERTICES f)) (FINALS g)`,
+  REWRITE_TAC[FACE_SQUANDER_LOWER_BOUND; SQF_SQUANDER_FACE]);;
+end;;

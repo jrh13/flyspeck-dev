@@ -1,0 +1,113 @@
+(* ------------------------------------------------------------------------- *)
+(* Executable form of the leaf check: the parent's squander total is passed  *)
+(* in (evaluated once per node) and the list of non-trivial arcs is computed *)
+(* once per leaf instead of once per certificate vertex and pair.            *)
+(* ------------------------------------------------------------------------- *)
+
+flyspeck_needs "graph/tg_leaf.hl";;
+
+module Tg_leaf_exec = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+open Tg_arcs;;
+open Tg_split_inv;;
+open Tg_enum_props;;
+open Tg_subdiv_inv;;
+open Tg_xlbthm;;
+open Tg_xdriver_lemmas;;
+open Tg_enum_fast;;
+open Tg_enum_fast2;;
+open Tg_xstats;;
+open Tg_leaf;;
+
+let PIECES_AT_A = new_definition
+ `PIECES_AT_A (arcs:(num#num#num#num)list) u =
+    LENGTH (FILTER (\arc. u = ARC_A arc \/ u = ARC_B arc) arcs)`;;
+
+let XCOUNTS_AFTER_A = new_definition
+ `XCOUNTS_AFTER_A g (vl:(num option)list) i n arcs u =
+    if n <= u then
+      [if i = 3 then 1 else 0; if i = 4 then 1 else 0;
+       if 5 <= i then 1 else 0; 1; SQUANDER_FACE i]
+    else if MEM u (SOMES vl) then
+      [TRI g u + (if i = 3 then 1 else 0); QUAD g u + (if i = 4 then 1 else 0);
+       EXCEPT g u + (if 5 <= i then 1 else 0);
+       NF_AT g u - 1 + PIECES_AT_A arcs u; SF_SUM g u + SQUANDER_FACE i]
+    else [TRI g u; QUAD g u; EXCEPT g u; NF_AT g u; SF_SUM g u]`;;
+
+let LEAF_SEP_PIECES_A = new_definition
+ `LEAF_SEP_PIECES_A f arcs u w <=>
+    ALL (\arc. ~(MEM u (ARC_VERTS f arc) /\ MEM w (ARC_VERTS f arc))) arcs`;;
+
+let LEAF_SEP_PAIR_A = new_definition
+ `LEAF_SEP_PAIR_A g f vl arcs u w <=>
+    LEAF_SEP_OLD g f u w /\ LEAF_SEP_OLD g f w u /\
+    LEAF_SEP_PIECES_A f arcs u w /\
+    LEAF_SEP_POLY (COUNT_VERTICES g) vl u w`;;
+
+let LEAF_SEP_A = define
+ `LEAF_SEP_A g f vl arcs [] = T /\
+  LEAF_SEP_A g f vl arcs (CONS u cs) =
+    (ALL (\w. LEAF_SEP_PAIR_A g f vl arcs u w) cs /\
+     LEAF_SEP_A g f vl arcs cs)`;;
+
+let XLB_LEAF_A = new_definition
+ `XLB_LEAF_A g f vl cs s arcs <=>
+    DISTINCT cs /\
+    ALL (\u. u < COUNT_VERTICES g + NEW_COUNT vl) cs /\
+    LEAF_SEP_A g f vl arcs cs /\
+    SQUANDER_TARGET <= s + SQUANDER_FACE (LENGTH vl) +
+                       LIST_SUM (\u. XEXCESS_OF
+                                   (XCOUNTS_AFTER_A g vl (LENGTH vl)
+                                                    (COUNT_VERTICES g) arcs u))
+                                cs`;;
+
+let XLB_LEAF_S = new_definition
+ `XLB_LEAF_S g f vl cs s =
+    XLB_LEAF_A g f vl cs s (PIECE_ARCS f (COUNT_VERTICES g) vl)`;;
+
+let LEAF_SEP_EQ_A = prove
+ (`!g f vl cs. LEAF_SEP g f vl cs <=>
+               LEAF_SEP_A g f vl (PIECE_ARCS f (COUNT_VERTICES g) vl) cs`,
+  GEN_TAC THEN GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[LEAF_SEP; LEAF_SEP_A; LEAF_SEP_PAIR; LEAF_SEP_PAIR_A;
+                  LEAF_SEP_PIECES; LEAF_SEP_PIECES_A]);;
+
+let XCOUNTS_AFTER_EQ_A = prove
+ (`!g f vl i n u. XCOUNTS_AFTER_I g f vl i n u =
+                  XCOUNTS_AFTER_A g vl i n (PIECE_ARCS f n vl) u`,
+  REWRITE_TAC[XCOUNTS_AFTER_I; XCOUNTS_AFTER_A; PIECES_AT; PIECES_AT_A]);;
+
+let XLB_LEAF_VIA_S = prove
+ (`!g f vl cs s. FACE_SQUANDER_LOWER_BOUND g = s
+                 ==> (XLB_LEAF g f vl cs <=> XLB_LEAF_S g f vl cs s)`,
+  REPEAT STRIP_TAC THEN
+  ASM_REWRITE_TAC[XLB_LEAF; XLB_LEAF_S; XLB_LEAF_A; LEAF_SEP_EQ_A;
+                  XCOUNTS_AFTER; XCOUNTS_AFTER_EQ_A]);;
+end;;

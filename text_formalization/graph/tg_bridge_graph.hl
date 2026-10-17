@@ -1,0 +1,514 @@
+(* ========================================================================= *)
+(* tame/tame_bridge_graph.ml -- Hales' graph functions and his enumeration   *)
+(* (hales_defs.ml) coincide with ours under the representation maps HFACE    *)
+(* and HGRAPH (tame_bridge_defs.ml).  The facesAt-based functions need the   *)
+(* vertex in range, next_plane needs WF_GRAPH; the last two theorems         *)
+(* transport Hales' reachability (RTranCl) and PlaneGraphs to ours.          *)
+(*                                                                           *)
+(* H_CONTAINSDUPLICATEEDGE and H_GENERATEPOLYGON carry the extra hypothesis  *)
+(* v < COUNT_VERTICES g: the index lists contain the index 0, for which the  *)
+(* edge test looks up facesAt at v itself, and for v out of range both sides *)
+(* read EL beyond the face-list table (on lists of different types), so the  *)
+(* unconditional statements are not provable.  H_NEXT_PLANE is unaffected.   *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_bridge_list.hl";;
+flyspeck_needs "graph/tg_wf_inv.hl";;
+
+module Tg_bridge_graph = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+
+(* ------------------------------------------------------------------------- *)
+(* The representation maps are mutually inverse bijections.                  *)
+(* ------------------------------------------------------------------------- *)
+
+let HFACE_OFACE = prove
+ (`!p. HFACE (OFACE p) = p`,
+  REWRITE_TAC[FORALL_PAIR_THM; HFACE; OFACE; VERTICES] THEN
+  REPEAT GEN_TAC THEN COND_CASES_TAC THEN ASM_REWRITE_TAC[FINAL_FACE]);;
+
+let OFACE_HFACE = prove
+ (`!f. OFACE (HFACE f) = f`,
+  REWRITE_TAC[FORALL_FACE_THM; HFACE; OFACE; VERTICES] THEN
+  GEN_TAC THEN MATCH_MP_TAC facetype_INDUCT THEN REWRITE_TAC[FINAL_FACE]);;
+
+let HFACE_INJ = prove
+ (`!f f'. HFACE f = HFACE f' <=> f = f'`,
+  MESON_TAC[OFACE_HFACE]);;
+
+let HGRAPH_OGRAPH = prove
+ (`!hg. HGRAPH (OGRAPH hg) = hg`,
+  REWRITE_TAC[FORALL_PAIR_THM; HGRAPH; OGRAPH; FACES; COUNT_VERTICES;
+              FACE_LIST_AT; HEIGHTS; h_faces; h_countVertices; h_faceListAt;
+              h_heights; GSYM MAP_o; o_DEF; HFACE_OFACE; MAP_ID]);;
+
+let OGRAPH_HGRAPH = prove
+ (`!g. OGRAPH (HGRAPH g) = g`,
+  REWRITE_TAC[FORALL_GRAPH_THM; HGRAPH; OGRAPH; FACES; COUNT_VERTICES;
+              FACE_LIST_AT; HEIGHTS; h_faces; h_countVertices; h_faceListAt;
+              h_heights; GSYM MAP_o; o_DEF; OFACE_HFACE; MAP_ID]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Projections of faces and graphs.                                          *)
+(* ------------------------------------------------------------------------- *)
+
+let H_VERTICES = prove
+ (`!f. FST (HFACE f) = VERTICES f`,
+  REWRITE_TAC[HFACE]);;
+
+let H_FINAL = prove
+ (`!f. SND (HFACE f) <=> FINAL_FACE f`,
+  REWRITE_TAC[HFACE]);;
+
+let H_SETFINAL = prove
+ (`!f. setFinal (HFACE f) = HFACE (SET_FINAL f)`,
+  REWRITE_TAC[HFACE; h_setFinal; SET_FINAL; VERTICES; FINAL_FACE]);;
+
+let H_FACES = prove
+ (`!g. faces (HGRAPH g) = MAP HFACE (FACES g)`,
+  REWRITE_TAC[HGRAPH; h_faces]);;
+
+let H_COUNTVERTICES = prove
+ (`!g. countVertices (HGRAPH g) = COUNT_VERTICES g`,
+  REWRITE_TAC[HGRAPH; h_countVertices]);;
+
+let H_FACELISTAT = prove
+ (`!g. faceListAt (HGRAPH g) = MAP (MAP HFACE) (FACE_LIST_AT g)`,
+  REWRITE_TAC[HGRAPH; h_faceListAt]);;
+
+let H_HEIGHTS = prove
+ (`!g. heights (HGRAPH g) = HEIGHTS g`,
+  REWRITE_TAC[HGRAPH; h_heights]);;
+
+let H_HEIGHT = prove
+ (`!g v. height (HGRAPH g) v = HEIGHT g v`,
+  REWRITE_TAC[h_height; HEIGHT; H_HEIGHTS]);;
+
+let H_HEIGHT_FUN = prove
+ (`!g. height (HGRAPH g) = HEIGHT g`,
+  REWRITE_TAC[FUN_EQ_THM; H_HEIGHT]);;
+
+let H_FACESAT = prove
+ (`!g v. v < LENGTH (FACE_LIST_AT g)
+         ==> facesAt (HGRAPH g) v = MAP HFACE (FACES_AT g v)`,
+  SIMP_TAC[h_facesAt; FACES_AT; H_FACELISTAT; EL_MAP]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The seed graphs.                                                          *)
+(* ------------------------------------------------------------------------- *)
+
+let MAP_REPLICATE_EQ = prove
+ (`!(f:A->B) n x. MAP f (REPLICATE n x) = REPLICATE n (f x)`,
+  GEN_TAC THEN INDUCT_TAC THEN ASM_REWRITE_TAC[REPLICATE; MAP]);;
+
+let H_GRAPHL = prove
+ (`!n. graphl n = HGRAPH (SEED_GRAPH n)`,
+  REWRITE_TAC[h_graphl; LET_DEF; LET_END_DEF; SEED_GRAPH_EXEC; HGRAPH; FACES;
+              COUNT_VERTICES; FACE_LIST_AT; HEIGHTS; h_Graph; H_UPT; MAP;
+              MAP_REPLICATE_EQ; HFACE; VERTICES; FINAL_FACE]);;
+
+let H_SEED = prove
+ (`!p. Seed p = HGRAPH (SEED p)`,
+  REWRITE_TAC[h_Seed; SEED; H_GRAPHL; H_MAXGON]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Final and nonfinal faces.                                                 *)
+(* ------------------------------------------------------------------------- *)
+
+let H_FINALS = prove
+ (`!g. finals (HGRAPH g) = MAP HFACE (FINALS g)`,
+  REWRITE_TAC[h_finals; FINALS; H_FACES; FILTER_MAP; o_DEF; H_FINAL;
+              ETA_AX]);;
+
+let H_NONFINALS = prove
+ (`!g. nonFinals (HGRAPH g) = MAP HFACE (NON_FINALS g)`,
+  REWRITE_TAC[h_nonFinals; NON_FINALS; H_FACES; FILTER_MAP; o_DEF; H_FINAL]);;
+
+let H_FINALGRAPH = prove
+ (`!g. finalGraph (HGRAPH g) <=> FINAL_GRAPH g`,
+  REWRITE_TAC[h_finalGraph; FINAL_GRAPH; H_NONFINALS; MAP_EQ_NIL]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Successor vertices, directed lengths, neighbours and duplicate edges.     *)
+(* ------------------------------------------------------------------------- *)
+
+let H_NEXTVERTEX = prove
+ (`!f v. nextVertex (HFACE f) v = NEXT_VERTEX f v`,
+  REWRITE_TAC[HFACE; h_nextVertex; H_NEXTELEM; NEXT_VERTEX; LET_DEF;
+              LET_END_DEF]);;
+
+let H_NEXTVERTEX_FUN = prove
+ (`!f. nextVertex (HFACE f) = NEXT_VERTEX f`,
+  REWRITE_TAC[FUN_EQ_THM; H_NEXTVERTEX]);;
+
+let H_NEXTVERTICES = prove
+ (`!f n v. nextVertices (HFACE f) n v = NEXT_VERTICES f n v`,
+  REWRITE_TAC[h_nextVertices; NEXT_VERTICES; H_NEXTVERTEX_FUN]);;
+
+let H_INDEXTOVERTEXLIST = prove
+ (`!f v is. indexToVertexList (HFACE f) v is = INDEX_TO_VERTEX_LIST f v is`,
+  REWRITE_TAC[h_indexToVertexList; INDEX_TO_VERTEX_LIST; H_HIDEDUPS;
+              H_NEXTVERTICES]);;
+
+let H_DIRECTEDLENGTH = prove
+ (`!f a b. directedLength (HFACE f) a b = DIRECTED_LENGTH f a b`,
+  REWRITE_TAC[h_directedLength; DIRECTED_LENGTH; H_VERTICES; H_BETWN]);;
+
+let H_NEIGHBORS = prove
+ (`!g v. v < LENGTH (FACE_LIST_AT g)
+         ==> neighbors (HGRAPH g) v = NEIGHBORS g v`,
+  SIMP_TAC[h_neighbors; NEIGHBORS; H_FACESAT; GSYM MAP_o; o_DEF;
+           H_NEXTVERTEX]);;
+
+let H_DUPLICATEEDGE = prove
+ (`!g f a b. a < LENGTH (FACE_LIST_AT g)
+             ==> (duplicateEdge (HGRAPH g) (HFACE f) a b <=>
+                  DUPLICATE_EDGE g f a b)`,
+  SIMP_TAC[h_duplicateEdge; DUPLICATE_EDGE; H_DIRECTEDLENGTH; IN_SET_OF_LIST;
+           H_NEIGHBORS]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Splitting a face into two.                                                *)
+(* ------------------------------------------------------------------------- *)
+
+let H_SPLIT_FACE = prove
+ (`!f r1 r2 nv. split_face (HFACE f) r1 r2 nv =
+                (HFACE (FST (SPLIT_FACE_PAIR f r1 r2 nv)),
+                 HFACE (SND (SPLIT_FACE_PAIR f r1 r2 nv)))`,
+  REWRITE_TAC[h_split_face; SPLIT_FACE_PAIR_EXEC; LET_DEF; LET_END_DEF;
+              H_VERTICES; H_BETWN; h_Face; HFACE; VERTICES; FINAL_FACE]);;
+
+(* ------------------------------------------------------------------------- *)
+(* REPLACE, LIST_UPDATE and MAP_AT commute with an injective MAP.            *)
+(* ------------------------------------------------------------------------- *)
+
+let REPLACE_HFACE = prove
+ (`!x ys zs. REPLACE (HFACE x) (MAP HFACE ys) (MAP HFACE zs) =
+             MAP HFACE (REPLACE x ys zs)`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[REPLACE; MAP; HFACE_INJ] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[MAP_APPEND; MAP]);;
+
+let REPLACE_HFACE1 = prove
+ (`!x a zs. REPLACE (HFACE x) [HFACE a] (MAP HFACE zs) =
+            MAP HFACE (REPLACE x [a] zs)`,
+  REPEAT GEN_TAC THEN
+  MP_TAC(SPECL [`x:face`; `[a:face]`; `zs:face list`] REPLACE_HFACE) THEN
+  REWRITE_TAC[MAP]);;
+
+let MAP_LIST_UPDATE = prove
+ (`!(f:A->B) xs i y.
+        MAP f (LIST_UPDATE xs i y) = LIST_UPDATE (MAP f xs) i (f y)`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN REWRITE_TAC[LIST_UPDATE; MAP] THEN
+  REPEAT GEN_TAC THEN COND_CASES_TAC THEN ASM_REWRITE_TAC[MAP]);;
+
+let MAP_AT_MAP = prove
+ (`!(f:A->B) (k:A->A) (k':B->B) ns xs.
+        (!x. k' (f x) = f (k x))
+        ==> MAP_AT ns k' (MAP f xs) = MAP f (MAP_AT ns k xs)`,
+  GEN_TAC THEN GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[MAP_AT] THEN GEN_TAC THEN DISCH_TAC THEN
+  REWRITE_TAC[LENGTH_MAP] THEN COND_CASES_TAC THEN
+  ASM_SIMP_TAC[EL_MAP; GSYM MAP_LIST_UPDATE]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Making a face final; replacing a face in the face lists at vertices.      *)
+(* ------------------------------------------------------------------------- *)
+
+let H_MAKEFACEFINALFACELIST = prove
+ (`!f fs. makeFaceFinalFaceList (HFACE f) (MAP HFACE fs) =
+          MAP HFACE (MAKE_FACE_FINAL_LIST f fs)`,
+  REWRITE_TAC[h_makeFaceFinalFaceList; MAKE_FACE_FINAL_LIST; H_REPLACE;
+              H_SETFINAL; REPLACE_HFACE1]);;
+
+let H_MAKEFACEFINAL = prove
+ (`!f g. makeFaceFinal (HFACE f) (HGRAPH g) = HGRAPH (MAKE_FACE_FINAL f g)`,
+  REWRITE_TAC[h_makeFaceFinal; MAKE_FACE_FINAL; HGRAPH; FACES; COUNT_VERTICES;
+              FACE_LIST_AT; HEIGHTS; h_Graph; h_faces; h_countVertices;
+              h_faceListAt; h_heights; H_MAKEFACEFINALFACELIST; GSYM MAP_o;
+              o_DEF]);;
+
+let H_REPLACE_FUN = prove
+ (`!(x:A) ys. replace x ys = REPLACE x ys`,
+  REWRITE_TAC[FUN_EQ_THM; H_REPLACE]);;
+
+let H_REPLACEFACESAT = prove
+ (`!ns f fs fss. replacefacesAt ns (HFACE f) (MAP HFACE fs)
+                                (MAP (MAP HFACE) fss) =
+                 MAP (MAP HFACE) (REPLACE_FACES_AT ns f fs fss)`,
+  REWRITE_TAC[h_replacefacesAt; REPLACE_FACES_AT; H_MAPAT; H_REPLACE_FUN] THEN
+  REPEAT GEN_TAC THEN MATCH_MP_TAC MAP_AT_MAP THEN
+  REWRITE_TAC[REPLACE_HFACE]);;
+
+let H_REPLACEFACESAT1 = prove
+ (`!ns f a fss. replacefacesAt ns (HFACE f) [HFACE a] (MAP (MAP HFACE) fss) =
+                MAP (MAP HFACE) (REPLACE_FACES_AT ns f [a] fss)`,
+  REPEAT GEN_TAC THEN
+  MP_TAC(SPECL [`ns:num list`; `f:face`; `[a:face]`; `fss:(face list)list`]
+    H_REPLACEFACESAT) THEN
+  REWRITE_TAC[MAP]);;
+
+let H_REPLACEFACESAT2 = prove
+ (`!ns f a b fss.
+        replacefacesAt ns (HFACE f) [HFACE a; HFACE b] (MAP (MAP HFACE) fss) =
+        MAP (MAP HFACE) (REPLACE_FACES_AT ns f [a;b] fss)`,
+  REPEAT GEN_TAC THEN
+  MP_TAC(SPECL [`ns:num list`; `f:face`; `[a:face;b]`; `fss:(face list)list`]
+    H_REPLACEFACESAT) THEN
+  REWRITE_TAC[MAP]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Splitting a face of a graph.                                              *)
+(* ------------------------------------------------------------------------- *)
+
+let H_SPLITFACE = prove
+ (`!g r1 r2 f nv. splitFace (HGRAPH g) r1 r2 (HFACE f) nv =
+                  (HFACE (FST (SPLIT_FACE g r1 r2 f nv)),
+                   HFACE (FST (SND (SPLIT_FACE g r1 r2 f nv))),
+                   HGRAPH (SND (SND (SPLIT_FACE g r1 r2 f nv))))`,
+  REWRITE_TAC[REWRITE_RULE[LET_ELIM_THM] h_splitFace;
+              REWRITE_RULE[LET_ELIM_THM] SPLIT_FACE] THEN
+  REWRITE_TAC[H_SPLIT_FACE; HGRAPH; FACES; COUNT_VERTICES; FACE_LIST_AT;
+              HEIGHTS; h_Graph; h_faces; h_countVertices; h_faceListAt;
+              h_heights; H_VERTICES; H_BETWN; H_REPLACE; H_C_EL;
+              H_HEIGHTSNEWVERTICES; MAP_APPEND; MAP; MAP_REPLICATE_EQ;
+              REPLACE_HFACE1; H_REPLACEFACESAT1; H_REPLACEFACESAT2]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Subdividing a face along a vertex option list.                            *)
+(* ------------------------------------------------------------------------- *)
+
+let HGRAPH_COND = prove
+ (`!b g g'. HGRAPH (if b then g else g') = if b then HGRAPH g else HGRAPH g'`,
+  REPEAT GEN_TAC THEN COND_CASES_TAC THEN REWRITE_TAC[]);;
+
+let H_SUBDIVFACE0 = prove
+ (`!vos g f u n. subdivFace0 (HGRAPH g) (HFACE f) u n vos =
+                 HGRAPH (SUBDIV_FACE_REC vos g f u n)`,
+  LIST_INDUCT_TAC THEN
+  REWRITE_TAC[h_subdivFace0; SUBDIV_FACE_REC_CLAUSES; H_MAKEFACEFINAL] THEN
+  REPEAT GEN_TAC THEN
+  STRUCT_CASES_TAC(ISPEC `h:num option` (cases "option")) THEN
+  ASM_REWRITE_TAC[option_DISTINCT; SUBDIV_FACE_REC_CLAUSES; LET_ELIM_THM;
+                  H_THE; H_NEXTVERTEX; H_COUNTVERTICES; H_UPT; H_SPLITFACE;
+                  HGRAPH_COND]);;
+
+let H_SUBDIVFACE = prove
+ (`!g f vos. ~(HD vos = NONE)
+             ==> subdivFace (HGRAPH g) (HFACE f) vos =
+                 HGRAPH (SUBDIV_FACE g f vos)`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[h_subdivFace; SUBDIV_FACE; H_SUBDIVFACE0] THEN
+  STRUCT_CASES_TAC(ISPEC `HD (vos:(num option)list)` (cases "option")) THEN
+  REWRITE_TAC[option_DISTINCT; H_THE; THE]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Vertices reached by nextVertices from a vertex of the graph stay in       *)
+(* range (WF_GRAPH).                                                         *)
+(* ------------------------------------------------------------------------- *)
+
+let WF_GRAPH_FACE = prove
+ (`!g f. WF_GRAPH g /\ MEM f (FACES g)
+         ==> ~(VERTICES f = []) /\
+             !x. MEM x (VERTICES f) ==> x < COUNT_VERTICES g`,
+  REWRITE_TAC[WF_GRAPH; GSYM ALL_MEM; NULL_EQ_NIL] THEN MESON_TAC[]);;
+
+let WF_GRAPH_LEN = prove
+ (`!g. WF_GRAPH g ==> LENGTH (FACE_LIST_AT g) = COUNT_VERTICES g`,
+  SIMP_TAC[WF_GRAPH; FACE_LIST_LEN]);;
+
+let NEXT_ELEM_MEM_OR_DEFAULT = prove
+ (`!l (b:A) x. MEM (NEXT_ELEM l b x) l \/ NEXT_ELEM l b x = b`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[NEXT_ELEM] THEN
+  POP_ASSUM MP_TAC THEN SPEC_TAC(`t:A list`,`t:A list`) THEN
+  LIST_INDUCT_TAC THEN REWRITE_TAC[NEXT_ELEM; MEM] THEN
+  DISCH_TAC THEN REPEAT GEN_TAC THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[MEM] THEN ASM_MESON_TAC[]);;
+
+let MEM_NOT_NIL = prove
+ (`!(x:A) l. MEM x l ==> ~(l = [])`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN REWRITE_TAC[MEM; NOT_CONS_NIL]);;
+
+let NEXT_VERTEX_MEM_VERTICES = prove
+ (`!f x. ~(VERTICES f = []) ==> MEM (NEXT_VERTEX f x) (VERTICES f)`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[NEXT_VERTEX; LET_DEF; LET_END_DEF] THEN
+  SPEC_TAC(`VERTICES f`,`l:num list`) THEN
+  LIST_INDUCT_TAC THEN REWRITE_TAC[NOT_CONS_NIL; HD] THEN
+  MESON_TAC[NEXT_ELEM_MEM_OR_DEFAULT; MEM]);;
+
+let NEXT_VERTICES_LT = prove
+ (`!g f v i. WF_GRAPH g /\ MEM f (FACES g) /\ v < COUNT_VERTICES g
+             ==> NEXT_VERTICES f i v < COUNT_VERTICES g`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  MP_TAC(SPECL [`g:graph`; `f:face`] WF_GRAPH_FACE) THEN
+  ASM_REWRITE_TAC[] THEN STRIP_TAC THEN
+  STRUCT_CASES_TAC(SPEC `i:num` num_CASES) THEN
+  ASM_REWRITE_TAC[NEXT_VERTICES; ITER] THEN
+  FIRST_X_ASSUM MATCH_MP_TAC THEN
+  MATCH_MP_TAC NEXT_VERTEX_MEM_VERTICES THEN ASM_REWRITE_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The duplicate-edge filter and polygon generation.                         *)
+(* ------------------------------------------------------------------------- *)
+
+let H_CONTAINSDUPLICATEEDGE = prove
+ (`!g f v is. WF_GRAPH g /\ MEM f (FACES g) /\ v < COUNT_VERTICES g
+              ==> (containsDuplicateEdge (HGRAPH g) (HFACE f) v is <=>
+                   CONTAINS_DUPLICATE_EDGE g f v is)`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  REWRITE_TAC[h_containsDuplicateEdge; CONTAINS_DUPLICATE_EDGE; H_CUE;
+              H_NEXTVERTICES] THEN
+  AP_THM_TAC THEN AP_TERM_TAC THEN REWRITE_TAC[FUN_EQ_THM] THEN
+  REPEAT GEN_TAC THEN MATCH_MP_TAC H_DUPLICATEEDGE THEN
+  ASM_SIMP_TAC[WF_GRAPH_LEN; NEXT_VERTICES_LT]);;
+
+let MEM_ENUMERATOR_HD = prove
+ (`!n m is. MEM is (ENUMERATOR n m) ==> ?rest. is = CONS 0 rest`,
+  REWRITE_TAC[ENUMERATOR_EXEC; MEM_MAP; APPEND] THEN MESON_TAC[]);;
+
+let HD_INDEX_TO_VERTEX_LIST = prove
+ (`!f v i rest. ~(HD (INDEX_TO_VERTEX_LIST f v (CONS i rest)) = NONE)`,
+  REWRITE_TAC[INDEX_TO_VERTEX_LIST; MAP; HIDE_DUPS; HD; option_DISTINCT]);;
+
+let H_GENERATEPOLYGON = prove
+ (`!n v f g. WF_GRAPH g /\ MEM f (FACES g) /\ v < COUNT_VERTICES g
+             ==> generatePolygon n v (HFACE f) (HGRAPH g) =
+                 MAP HGRAPH (GENERATE_POLYGON n v f g)`,
+  REPEAT GEN_TAC THEN DISCH_TAC THEN
+  REWRITE_TAC[h_generatePolygon; GENERATE_POLYGON_EXEC; LET_DEF; LET_END_DEF;
+              H_ENUMERATOR; H_VERTICES; H_INDEXTOVERTEXLIST] THEN
+  ASM_SIMP_TAC[H_CONTAINSDUPLICATEEDGE] THEN
+  REWRITE_TAC[GSYM MAP_o; o_DEF] THEN MATCH_MP_TAC MAP_EQ THEN
+  REWRITE_TAC[GSYM ALL_MEM; MEM_FILTER] THEN
+  X_GEN_TAC `is:num list` THEN STRIP_TAC THEN
+  FIRST_X_ASSUM(X_CHOOSE_THEN `rest:num list` SUBST1_TAC o
+    MATCH_MP MEM_ENUMERATOR_HD) THEN
+  MATCH_MP_TAC H_SUBDIVFACE THEN REWRITE_TAC[HD_INDEX_TO_VERTEX_LIST]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The minimal face and the minimal vertex.                                  *)
+(* ------------------------------------------------------------------------- *)
+
+let MINIMAL_EL_MAP = prove
+ (`!(m:B->num) (k:A->B) xs x.
+        MINIMAL_EL m (CONS (k x) (MAP k xs)) =
+        k (MINIMAL_EL (m o k) (CONS x xs))`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN GEN_TAC THEN
+  ONCE_REWRITE_TAC[MINIMAL_EL_EXEC] THEN
+  ASM_REWRITE_TAC[MAP; NOT_CONS_NIL; o_THM] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[]);;
+
+let H_MINIMALFACE = prove
+ (`!fs. ~(fs = []) ==> minimalFace (MAP HFACE fs) = HFACE (MINIMAL_FACE fs)`,
+  GEN_TAC THEN STRUCT_CASES_TAC(ISPEC `fs:face list` list_CASES) THEN
+  REWRITE_TAC[NOT_CONS_NIL; h_minimalFace; MINIMAL_FACE; MAP; H_MINIMAL_EL;
+              MINIMAL_EL_MAP] THEN
+  AP_TERM_TAC THEN AP_THM_TAC THEN AP_TERM_TAC THEN
+  REWRITE_TAC[FUN_EQ_THM; o_THM; H_VERTICES]);;
+
+let H_MINIMALVERTEX = prove
+ (`!g f. ~(VERTICES f = [])
+         ==> minimalVertex (HGRAPH g) (HFACE f) = MINIMAL_VERTEX g f`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[h_minimalVertex; MINIMAL_VERTEX; H_VERTICES; H_HEIGHT_FUN] THEN
+  STRUCT_CASES_TAC(ISPEC `VERTICES f` list_CASES) THEN
+  REWRITE_TAC[NOT_CONS_NIL; H_MINIMAL_EL]);;
+
+(* ------------------------------------------------------------------------- *)
+(* One refinement step.                                                      *)
+(* ------------------------------------------------------------------------- *)
+
+let FLAT_MAP_MAP = prove
+ (`!(h:B->C) (k:A->B list) l.
+        FLAT (MAP (\i. MAP h (k i)) l) = MAP h (FLAT (MAP k l))`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[FLAT; MAP; MAP_APPEND]);;
+
+let H_NEXT_PLANE = prove
+ (`!p g. WF_GRAPH g ==> next_plane p (HGRAPH g) = MAP HGRAPH (NEXT_PLANE p g)`,
+  REPEAT GEN_TAC THEN DISCH_TAC THEN
+  REWRITE_TAC[h_next_plane; NEXT_PLANE; LET_DEF; LET_END_DEF; H_NONFINALS;
+              MAP_EQ_NIL] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[MAP] THEN
+  ASM_SIMP_TAC[H_MINIMALFACE] THEN
+  SUBGOAL_THEN `MEM (MINIMAL_FACE (NON_FINALS g)) (FACES g)` ASSUME_TAC THENL
+   [REWRITE_TAC[MINIMAL_FACE] THEN
+    ASM_MESON_TAC[MEM_MINIMAL_EL; MEM_NON_FINALS];
+    ALL_TAC] THEN
+  MP_TAC(SPECL [`g:graph`; `MINIMAL_FACE (NON_FINALS g)`] WF_GRAPH_FACE) THEN
+  ASM_REWRITE_TAC[] THEN STRIP_TAC THEN
+  SUBGOAL_THEN
+   `MINIMAL_VERTEX g (MINIMAL_FACE (NON_FINALS g)) < COUNT_VERTICES g`
+  ASSUME_TAC THENL
+   [FIRST_X_ASSUM MATCH_MP_TAC THEN REWRITE_TAC[MINIMAL_VERTEX] THEN
+    ASM_SIMP_TAC[MEM_MINIMAL_EL];
+    ALL_TAC] THEN
+  ASM_SIMP_TAC[H_MINIMALVERTEX; H_GENERATEPOLYGON; H_FLATTEN; H_UPT; H_MAXGON;
+               FLAT_MAP_MAP]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Hales' reachable graphs are the images of ours, and so are his plane      *)
+(* graphs.                                                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let REACH_STEP = prove
+ (`!p g g'. MEM g' (NEXT_PLANE p g) ==> REACH p g g'`,
+  MESON_TAC[REACH_CASES; REACH_REFL]);;
+
+let H_RTRANCL_REACH = prove
+ (`!p hg. (Seed p, hg) IN RTranCl (next_plane p)
+          ==> ?g. hg = HGRAPH g /\ REACH p (SEED p) g`,
+  GEN_TAC THEN REWRITE_TAC[h_RTranCl; IN; UNCURRY_DEF] THEN
+  SUBGOAL_THEN
+   `!x y. RTC (\x y. MEM y (next_plane p x)) x y
+          ==> (?g0. x = HGRAPH g0 /\ REACH p (SEED p) g0)
+              ==> ?g. y = HGRAPH g /\ REACH p (SEED p) g`
+  MP_TAC THENL
+   [ALL_TAC; MESON_TAC[H_SEED; REACH_REFL]] THEN
+  MATCH_MP_TAC RTC_INDUCT_L THEN CONJ_TAC THENL [REWRITE_TAC[]; ALL_TAC] THEN
+  REPEAT GEN_TAC THEN REWRITE_TAC[] THEN STRIP_TAC THEN
+  DISCH_THEN(fun th -> FIRST_X_ASSUM(MP_TAC o C MATCH_MP th)) THEN
+  DISCH_THEN(X_CHOOSE_THEN `g1:graph`
+    (CONJUNCTS_THEN2 SUBST_ALL_TAC ASSUME_TAC)) THEN
+  SUBGOAL_THEN `WF_GRAPH g1` ASSUME_TAC THENL
+   [ASM_MESON_TAC[WF_GRAPH_REACH]; ALL_TAC] THEN
+  UNDISCH_TAC `MEM z (next_plane p (HGRAPH g1))` THEN
+  ASM_SIMP_TAC[H_NEXT_PLANE; MEM_MAP] THEN
+  DISCH_THEN(X_CHOOSE_THEN `g2:graph` STRIP_ASSUME_TAC) THEN
+  EXISTS_TAC `g2:graph` THEN ASM_REWRITE_TAC[] THEN
+  ASM_MESON_TAC[REACH_TRANS; REACH_STEP]);;
+
+let H_PLANEGRAPHS = prove
+ (`!hg. PlaneGraphs hg ==> ?g. hg = HGRAPH g /\ g IN PLANE_GRAPHS`,
+  GEN_TAC THEN GEN_REWRITE_TAC LAND_CONV [GSYM IN] THEN
+  REWRITE_TAC[h_PlaneGraphs; UNIONS_IMAGE; IN_ELIM_THM; IN_UNIV;
+              h_planeGraphsP] THEN
+  DISCH_THEN(X_CHOOSE_THEN `p:num` (CONJUNCTS_THEN2 MP_TAC ASSUME_TAC)) THEN
+  DISCH_THEN(X_CHOOSE_THEN `g:graph` STRIP_ASSUME_TAC o
+    MATCH_MP H_RTRANCL_REACH) THEN
+  UNDISCH_TAC `finalGraph hg` THEN ASM_REWRITE_TAC[H_FINALGRAPH] THEN
+  DISCH_TAC THEN EXISTS_TAC `g:graph` THEN
+  ASM_REWRITE_TAC[IN_PLANE_GRAPHS; GSYM REACH] THEN
+  EXISTS_TAC `p:num` THEN ASM_REWRITE_TAC[]);;
+end;;

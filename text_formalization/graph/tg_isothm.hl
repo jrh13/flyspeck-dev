@@ -1,0 +1,164 @@
+(* ========================================================================= *)
+(* tame/tame_isothm.ml                                                       *)
+(*                                                                           *)
+(* Soundness of the isomorphism certificate: ISO_CERT_OK fs1 fs2 c implies   *)
+(* ISO_FGRAPH fs1 fs2 (Hales' / Isabelle's notion).  The certificate's       *)
+(* vertex map phi (a list) is injective on the vertices of fs1 because phi   *)
+(* is distinct and every vertex is an index into it; the face matchings give *)
+(* the congruence classes of MAP phi applied to fs1 and of fs2 (possibly     *)
+(* with every face reversed) as the same set.  The witness for ISO_FGRAPH    *)
+(* is APPLY_MAP phi; ISO_CERT_SOUND_PROVED replaces ISO_CERT_SOUND of        *)
+(* tame_sound.ml.                                                            *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_sound.hl";;
+
+module Tg_isothm = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+
+(* ------------------------------------------------------------------------- *)
+(* Congruent faces have the same congruence class.                           *)
+(* ------------------------------------------------------------------------- *)
+
+let CONG_CLASS_EQ = prove
+ (`!xs ys:A list. CONG xs ys ==> CONG_CLASS xs = CONG_CLASS ys`,
+  REPEAT STRIP_TAC THEN REWRITE_TAC[CONG_CLASS; EXTENSION; IN_ELIM_THM] THEN
+  ASM_MESON_TAC[CONG_SYM; CONG_TRANS]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The EL images of two distinct indices below LENGTH differ.                *)
+(* ------------------------------------------------------------------------- *)
+
+let DISTINCT_EL_INJ = prove
+ (`!l:A list i j. DISTINCT l /\ i < LENGTH l /\ j < LENGTH l /\ EL i l = EL j l
+                  ==> i = j`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[LENGTH; CONJUNCT1 LT; DISTINCT] THEN
+  INDUCT_TAC THEN INDUCT_TAC THEN
+  REWRITE_TAC[EL; HD; TL; LT_SUC; LT_0; SUC_INJ; NOT_SUC; GSYM NOT_SUC] THEN
+  ASM_MESON_TAC[MEM_EL]);;
+
+(* ------------------------------------------------------------------------- *)
+(* ALL2 P l m matches every member of l with some member of m.               *)
+(* ------------------------------------------------------------------------- *)
+
+let ALL2_MEM_EXISTS = prove
+ (`!P (l:A list) (m:B list).
+        ALL2 P l m ==> !x. MEM x l ==> ?y. MEM y m /\ P x y`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[ALL2; MEM] THEN ASM_MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* A face match (in either direction) gives a congruent face on the other   *)
+(* side: the matched face is the rotation named by the certificate.          *)
+(* ------------------------------------------------------------------------- *)
+
+let FACE_MATCH_CONG = prove
+ (`!phi fs2 f jr. FACE_MATCH phi fs2 f jr
+                  ==> ?g. MEM g fs2 /\ CONG (MAP (APPLY_MAP phi) f) g`,
+  REWRITE_TAC[FORALL_PAIR_THM; FACE_MATCH; CONG] THEN MESON_TAC[MEM_EL]);;
+
+let FACE_MATCH_BACK_CONG = prove
+ (`!phi fs1 f2 ir. FACE_MATCH_BACK phi fs1 f2 ir
+                   ==> ?f. MEM f fs1 /\ CONG (MAP (APPLY_MAP phi) f) f2`,
+  REWRITE_TAC[FORALL_PAIR_THM; FACE_MATCH_BACK; CONG] THEN
+  MESON_TAC[MEM_EL]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The two matchings make APPLY_MAP phi a proper homomorphism of the face    *)
+(* sets: each face of fs1 maps into the class of a face of fs2 and every     *)
+(* face of fs2 lies in the class of the image of a face of fs1.              *)
+(* ------------------------------------------------------------------------- *)
+
+let ISO_CERT_PR_HOM = prove
+ (`!phi fs1 fs2 m1 m2.
+        ALL2 (FACE_MATCH phi fs2) fs1 m1 /\
+        ALL2 (FACE_MATCH_BACK phi fs1) fs2 m2
+        ==> IS_PR_HOM (APPLY_MAP phi) (set_of_list fs1) (set_of_list fs2)`,
+  REPEAT STRIP_TAC THEN
+  SUBGOAL_THEN
+   `!f. MEM f (fs1:((num)list)list)
+        ==> ?g. MEM g fs2 /\ CONG_CLASS (MAP (APPLY_MAP phi) f) = CONG_CLASS g`
+  ASSUME_TAC THENL
+   [MP_TAC(ISPECL [`FACE_MATCH phi fs2`; `fs1:((num)list)list`;
+                   `m1:(num#num)list`] ALL2_MEM_EXISTS) THEN
+    ASM_REWRITE_TAC[] THEN MESON_TAC[FACE_MATCH_CONG; CONG_CLASS_EQ];
+    ALL_TAC] THEN
+  SUBGOAL_THEN
+   `!g. MEM g (fs2:((num)list)list)
+        ==> ?f. MEM f fs1 /\ CONG_CLASS (MAP (APPLY_MAP phi) f) = CONG_CLASS g`
+  ASSUME_TAC THENL
+   [MP_TAC(ISPECL [`FACE_MATCH_BACK phi fs1`; `fs2:((num)list)list`;
+                   `m2:(num#num)list`] ALL2_MEM_EXISTS) THEN
+    ASM_REWRITE_TAC[] THEN MESON_TAC[FACE_MATCH_BACK_CONG; CONG_CLASS_EQ];
+    ALL_TAC] THEN
+  REWRITE_TAC[IS_PR_HOM; EXTENSION; IN_IMAGE; IN_SET_OF_LIST] THEN
+  ASM_MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Injectivity on the vertices of fs1: they are indices below LENGTH phi and *)
+(* phi is distinct.                                                          *)
+(* ------------------------------------------------------------------------- *)
+
+let ISO_CERT_INJ_ON = prove
+ (`!phi fs1:((num)list)list.
+        ALL (ALL (\v. v < LENGTH phi)) fs1 /\ DISTINCT phi
+        ==> INJ_ON (APPLY_MAP phi)
+                   (UNIONS (IMAGE set_of_list (set_of_list fs1)))`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[GSYM ALL_MEM] THEN STRIP_TAC THEN
+  REWRITE_TAC[INJ_ON; IN_UNIONS; IN_IMAGE; IN_SET_OF_LIST; APPLY_MAP] THEN
+  MAP_EVERY X_GEN_TAC [`x:num`; `y:num`] THEN STRIP_TAC THEN
+  MATCH_MP_TAC(ISPEC `phi:num list` DISTINCT_EL_INJ) THEN
+  ASM_MESON_TAC[IN_SET_OF_LIST]);;
+
+let ISO_CERT_PR_ISO = prove
+ (`!phi fs1 fs2 m1 m2.
+        ALL (ALL (\v. v < LENGTH phi)) fs1 /\ DISTINCT phi /\
+        ALL2 (FACE_MATCH phi fs2) fs1 m1 /\
+        ALL2 (FACE_MATCH_BACK phi fs1) fs2 m2
+        ==> IS_PR_ISO (APPLY_MAP phi) (set_of_list fs1) (set_of_list fs2)`,
+  REPEAT STRIP_TAC THEN REWRITE_TAC[IS_PR_ISO] THEN CONJ_TAC THENL
+   [MATCH_MP_TAC ISO_CERT_PR_HOM THEN
+    MAP_EVERY EXISTS_TAC [`m1:(num#num)list`; `m2:(num#num)list`] THEN
+    ASM_REWRITE_TAC[];
+    MATCH_MP_TAC ISO_CERT_INJ_ON THEN ASM_REWRITE_TAC[]]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The soundness theorem: unfold the certificate (ISO_CERT_OK_EXEC is the    *)
+(* let-free form), split on the reversal flag, take APPLY_MAP phi as the     *)
+(* witness; in the reversed case set_of_list (MAP REVERSE fs2) is            *)
+(* IMAGE REVERSE (set_of_list fs2).                                          *)
+(* ------------------------------------------------------------------------- *)
+
+let ISO_CERT_SOUND_PROVED = prove
+ (`!fs1 fs2 c. ISO_CERT_OK fs1 fs2 c ==> ISO_FGRAPH fs1 fs2`,
+  REWRITE_TAC[FORALL_PAIR_THM; ISO_CERT_OK_EXEC] THEN
+  MAP_EVERY X_GEN_TAC
+   [`fs1:((num)list)list`; `fs2:((num)list)list`; `phi:num list`;
+    `rv:bool`; `m1:(num#num)list`; `m2:(num#num)list`] THEN
+  REWRITE_TAC[ISO_FGRAPH; IS_ISO_LIST; IS_ISO] THEN
+  COND_CASES_TAC THEN STRIP_TAC THEN EXISTS_TAC `APPLY_MAP phi` THENL
+   [DISJ2_TAC THEN REWRITE_TAC[GSYM SET_OF_LIST_MAP]; DISJ1_TAC] THEN
+  MATCH_MP_TAC ISO_CERT_PR_ISO THEN
+  MAP_EVERY EXISTS_TAC [`m1:(num#num)list`; `m2:(num#num)list`] THEN
+  ASM_REWRITE_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* A final graph with a certificate to an archive member satisfies TFO.      *)
+(* ------------------------------------------------------------------------- *)
+
+let TFO_FINAL_ISO = prove
+ (`!arch p g y c.
+     FINAL_GRAPH g /\ MEM y arch /\ ISO_CERT_OK (FGRAPH g) y c
+     ==> TFO arch p g`,
+  MESON_TAC[TFO_FINAL; ISO_CERT_SOUND_PROVED]);;
+end;;

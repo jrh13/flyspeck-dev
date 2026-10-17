@@ -1,0 +1,279 @@
+(* ========================================================================= *)
+(* tame/tame_wf_inv.ml -- WF_GRAPH (tame_wf.ml) holds for the seeds and is   *)
+(* preserved by NEXT_PLANE, hence holds for every reachable graph.  Needed   *)
+(* by the bridge to Hales' representation (tame_bridge_graph.ml).            *)
+(*                                                                           *)
+(* Route: every successor is SUBDIV_FACE_REC vos g f v 0 for the minimal     *)
+(* nonfinal face f, a vertex v of f and a vertex option list vos whose SOME  *)
+(* entries are vertices of f (NEXT_VERTICES stays in the face, HIDE_DUPS     *)
+(* only hides); SUBDIV_FACE_REC preserves WF_GRAPH when the face, the        *)
+(* current vertex and the SOME entries are below the vertex count            *)
+(* (induction on vos), because a split adds the new vertices to both the     *)
+(* count and the face table and builds its two faces from u, v, the vertices *)
+(* BETWEEN them and the new vertices, and MAKE_FACE_FINAL only changes a     *)
+(* face type.                                                                *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_wf.hl";;
+flyspeck_needs "graph/tg_sound.hl";;
+flyspeck_needs "graph/tg_mono.hl";;
+
+module Tg_wf_inv = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+
+(* ------------------------------------------------------------------------- *)
+(* List facts.                                                               *)
+(* ------------------------------------------------------------------------- *)
+
+let MEM_REVERSE = prove
+ (`!l x:A. MEM x (REVERSE l) <=> MEM x l`,
+  LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[REVERSE; MEM; MEM_APPEND] THEN
+  MESON_TAC[]);;
+
+let ALL_REPLACE = prove
+ (`!P (x:A) ys zs. ALL P zs /\ ALL P ys ==> ALL P (REPLACE x ys zs)`,
+  REWRITE_TAC[GSYM ALL_MEM] THEN MESON_TAC[MEM_REPLACE]);;
+
+let MEM_SPLIT_AT_LIN = prove
+ (`!l (c:A) x. (MEM x (FST(SPLIT_AT_LIN c l)) ==> MEM x l) /\
+               (MEM x (SND(SPLIT_AT_LIN c l)) ==> MEM x l)`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[SPLIT_AT_LIN; MEM] THEN
+  REPEAT GEN_TAC THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[LET_DEF; LET_END_DEF; MEM] THEN ASM_MESON_TAC[]);;
+
+let MEM_BETWEEN = prove
+ (`!(vs:A list) a b x. MEM x (BETWEEN vs a b) ==> MEM x vs`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[BETWEEN; LET_ELIM_THM; SPLIT_AT_EXEC] THEN
+  COND_CASES_TAC THEN REWRITE_TAC[MEM_APPEND] THEN
+  MESON_TAC[MEM_SPLIT_AT_LIN]);;
+
+let NEXT_ELEM_MEM = prove
+ (`!l (b:A) x. NEXT_ELEM l b x = b \/ MEM (NEXT_ELEM l b x) l`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[NEXT_ELEM] THEN
+  POP_ASSUM MP_TAC THEN STRUCT_CASES_TAC(ISPEC `t:A list` list_CASES) THEN
+  REWRITE_TAC[NEXT_ELEM; MEM] THEN DISCH_TAC THEN REPEAT GEN_TAC THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[MEM] THEN ASM_MESON_TAC[]);;
+
+let MEM_SOME_HIDE_DUPS_REC = prove
+ (`!l (a:A) x. MEM (SOME x) (HIDE_DUPS_REC a l) ==> MEM x l`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[HIDE_DUPS_REC; MEM] THEN
+  REPEAT GEN_TAC THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[MEM; option_DISTINCT; option_INJ] THEN ASM_MESON_TAC[]);;
+
+let ENUMERATOR_CONS_0 = prove
+ (`!i m is. MEM is (ENUMERATOR i m) ==> ?rest. is = CONS 0 rest`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[ENUMERATOR; LET_DEF; LET_END_DEF; MEM_MAP; APPEND] THEN
+  MESON_TAC[]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Walking along a face stays in the face.                                   *)
+(* ------------------------------------------------------------------------- *)
+
+let NEXT_VERTEX_MEM = prove
+ (`!f v. MEM v (VERTICES f) ==> MEM (NEXT_VERTEX f v) (VERTICES f)`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[NEXT_VERTEX; LET_DEF; LET_END_DEF] THEN
+  STRUCT_CASES_TAC(ISPEC `VERTICES f` list_CASES) THEN
+  REWRITE_TAC[MEM; HD] THEN MESON_TAC[NEXT_ELEM_MEM; MEM]);;
+
+let NEXT_VERTICES_MEM = prove
+ (`!f n v. MEM v (VERTICES f) ==> MEM (NEXT_VERTICES f n v) (VERTICES f)`,
+  GEN_TAC THEN REWRITE_TAC[NEXT_VERTICES] THEN INDUCT_TAC THEN
+  REWRITE_TAC[ITER] THEN ASM_MESON_TAC[NEXT_VERTEX_MEM]);;
+
+let NEXT_VERTICES_0 = prove
+ (`!f v. NEXT_VERTICES f 0 v = v`,
+  REWRITE_TAC[NEXT_VERTICES; ITER]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The seeds.                                                                *)
+(* ------------------------------------------------------------------------- *)
+
+let WF_GRAPH_SEED = prove
+ (`!p. WF_GRAPH (SEED p)`,
+  GEN_TAC THEN
+  REWRITE_TAC[WF_GRAPH; FACE_LIST_LEN; SEED; SEED_GRAPH_CLAUSES; MAX_GON;
+              LENGTH_REPLICATE; ALL; VERTICES; NULL_EQ_NIL;
+              REVERSE_EQ_EMPTY] THEN
+  REWRITE_TAC[GSYM LENGTH_EQ_NIL; LENGTH_UPT; GSYM ALL_MEM; MEM_REVERSE;
+              MEM_UPT] THEN
+  REPEAT STRIP_TAC THEN ASM_ARITH_TAC);;
+
+(* ------------------------------------------------------------------------- *)
+(* The two refinement steps.                                                 *)
+(* ------------------------------------------------------------------------- *)
+
+let WF_GRAPH_MAKE_FACE_FINAL = prove
+ (`!f g. WF_GRAPH g ==> WF_GRAPH (MAKE_FACE_FINAL f g)`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[WF_GRAPH; FACE_LIST_LEN; MAKE_FACE_FINAL_CLAUSES;
+              LENGTH_MAP] THEN
+  REWRITE_TAC[GSYM ALL_MEM] THEN STRIP_TAC THEN ASM_REWRITE_TAC[] THEN
+  X_GEN_TAC `f':face` THEN
+  DISCH_THEN(MP_TAC o MATCH_MP MEM_REPLACE) THEN
+  REWRITE_TAC[MEM] THEN ASM_MESON_TAC[VERTICES_SET_FINAL]);;
+
+let SPLIT_FACE_PAIR_WF = prove
+ (`!f u v ws m.
+     ALL (\x. x < m) (VERTICES f) /\ u < m /\ v < m /\ ALL (\x. x < m) ws
+     ==> ~NULL (VERTICES (FST (SPLIT_FACE_PAIR f u v ws))) /\
+         ALL (\x. x < m) (VERTICES (FST (SPLIT_FACE_PAIR f u v ws))) /\
+         ~NULL (VERTICES (SND (SPLIT_FACE_PAIR f u v ws))) /\
+         ALL (\x. x < m) (VERTICES (SND (SPLIT_FACE_PAIR f u v ws)))`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[SPLIT_FACE_PAIR_EXEC; VERTICES; APPEND] THEN
+  REWRITE_TAC[GSYM ALL_MEM; NULL_EQ_NIL; APPEND_EQ_NIL; NOT_CONS_NIL;
+              MEM_APPEND; MEM; MEM_REVERSE] THEN
+  MESON_TAC[MEM_BETWEEN]);;
+
+let ALL_LT_MONO = prove
+ (`!m m' l. m <= m' /\ ALL (\x. x < m) l ==> ALL (\x. x < m') l`,
+  REWRITE_TAC[GSYM ALL_MEM] THEN MESON_TAC[LTE_TRANS]);;
+
+let ALL_WF_FACE_MONO = prove
+ (`!m m' fs.
+     m <= m' /\
+     ALL (\f. ~NULL (VERTICES f) /\ ALL (\x. x < m) (VERTICES f)) fs
+     ==> ALL (\f. ~NULL (VERTICES f) /\ ALL (\x. x < m') (VERTICES f)) fs`,
+  REWRITE_TAC[GSYM ALL_MEM] THEN MESON_TAC[LTE_TRANS]);;
+
+let WF_GRAPH_SPLIT_FACE = prove
+ (`!g u v f ws.
+     WF_GRAPH g /\ ALL (\x. x < COUNT_VERTICES g) (VERTICES f) /\
+     u < COUNT_VERTICES g /\ v < COUNT_VERTICES g /\
+     ALL (\x. x < COUNT_VERTICES g + LENGTH ws) ws
+     ==> WF_GRAPH (SND(SND(SPLIT_FACE g u v f ws))) /\
+         ALL (\x. x < COUNT_VERTICES (SND(SND(SPLIT_FACE g u v f ws))))
+             (VERTICES (FST(SND(SPLIT_FACE g u v f ws)))) /\
+         COUNT_VERTICES g <= COUNT_VERTICES (SND(SND(SPLIT_FACE g u v f ws)))`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[WF_GRAPH; FACE_LIST_LEN; SPLIT_FACE_FACES; SPLIT_FACE_COMPONENTS;
+              SPLIT_FACE_COUNT_VERTICES; SPLIT_FACE_LENGTH_FACE_LIST_AT;
+              LE_ADD] THEN
+  STRIP_TAC THEN ASM_REWRITE_TAC[] THEN
+  MP_TAC(SPECL [`f:face`; `u:num`; `v:num`; `ws:num list`;
+                `COUNT_VERTICES g + LENGTH(ws:num list)`]
+    SPLIT_FACE_PAIR_WF) THEN
+  ANTS_TAC THENL
+   [ASM_REWRITE_TAC[] THEN REPEAT CONJ_TAC THEN TRY ASM_ARITH_TAC THEN
+    MATCH_MP_TAC ALL_LT_MONO THEN EXISTS_TAC `COUNT_VERTICES g` THEN
+    ASM_REWRITE_TAC[LE_ADD];
+    STRIP_TAC THEN ASM_REWRITE_TAC[ALL_APPEND; ALL] THEN
+    MATCH_MP_TAC ALL_REPLACE THEN ASM_REWRITE_TAC[ALL] THEN
+    MATCH_MP_TAC ALL_WF_FACE_MONO THEN EXISTS_TAC `COUNT_VERTICES g` THEN
+    ASM_REWRITE_TAC[LE_ADD]]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Subdividing a face.                                                       *)
+(* ------------------------------------------------------------------------- *)
+
+let WF_GRAPH_SUBDIV_FACE_REC = prove
+ (`!vos g f u n.
+     WF_GRAPH g /\ ALL (\x. x < COUNT_VERTICES g) (VERTICES f) /\
+     u < COUNT_VERTICES g /\
+     (!x. MEM (SOME x) vos ==> x < COUNT_VERTICES g)
+     ==> WF_GRAPH (SUBDIV_FACE_REC vos g f u n)`,
+  LIST_INDUCT_TAC THENL
+   [REWRITE_TAC[SUBDIV_FACE_REC_CLAUSES] THEN
+    MESON_TAC[WF_GRAPH_MAKE_FACE_FINAL];
+    ALL_TAC] THEN
+  REPEAT GEN_TAC THEN
+  STRUCT_CASES_TAC(ISPEC `h:num option` (cases "option")) THEN
+  REWRITE_TAC[SUBDIV_FACE_REC_CLAUSES; MEM; option_DISTINCT; option_INJ] THEN
+  STRIP_TAC THENL
+   [FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[];
+    ALL_TAC] THEN
+  COND_CASES_TAC THEN ASM_REWRITE_TAC[LET_ELIM_THM] THENL
+   [FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[];
+    ALL_TAC] THEN
+  MP_TAC(SPECL [`g:graph`; `u:num`; `a:num`; `f:face`;
+                `UPT (COUNT_VERTICES g) (COUNT_VERTICES g + n)`]
+    WF_GRAPH_SPLIT_FACE) THEN
+  ANTS_TAC THENL
+   [ASM_REWRITE_TAC[] THEN CONJ_TAC THENL [ASM_MESON_TAC[]; ALL_TAC] THEN
+    REWRITE_TAC[GSYM ALL_MEM; MEM_UPT; LENGTH_UPT] THEN ARITH_TAC;
+    STRIP_TAC THEN FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[] THEN
+    ASM_MESON_TAC[LTE_TRANS]]);;
+
+let WF_GRAPH_SUBDIV_FACE = prove
+ (`!g f v is.
+     WF_GRAPH g /\ MEM f (FACES g) /\ MEM v (VERTICES f)
+     ==> WF_GRAPH (SUBDIV_FACE g f (INDEX_TO_VERTEX_LIST f v (CONS 0 is)))`,
+  REPEAT STRIP_TAC THEN
+  REWRITE_TAC[INDEX_TO_VERTEX_LIST; MAP; HIDE_DUPS; SUBDIV_FACE; HD; TL; THE;
+              NEXT_VERTICES_0] THEN
+  MATCH_MP_TAC WF_GRAPH_SUBDIV_FACE_REC THEN
+  SUBGOAL_THEN `!x. MEM x (VERTICES f) ==> x < COUNT_VERTICES g`
+  ASSUME_TAC THENL
+   [UNDISCH_TAC `WF_GRAPH g` THEN REWRITE_TAC[WF_GRAPH; GSYM ALL_MEM] THEN
+    ASM_MESON_TAC[];
+    ALL_TAC] THEN
+  ASM_REWRITE_TAC[GSYM ALL_MEM] THEN CONJ_TAC THENL
+   [ASM_MESON_TAC[];
+    X_GEN_TAC `x:num` THEN
+    DISCH_THEN(MP_TAC o MATCH_MP MEM_SOME_HIDE_DUPS_REC) THEN
+    REWRITE_TAC[MEM_MAP] THEN ASM_MESON_TAC[NEXT_VERTICES_MEM]]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The successors of a graph.                                                *)
+(* ------------------------------------------------------------------------- *)
+
+let WF_GRAPH_GENERATE_POLYGON = prove
+ (`!i v f g g'.
+     WF_GRAPH g /\ MEM f (FACES g) /\ MEM v (VERTICES f) /\
+     MEM g' (GENERATE_POLYGON i v f g)
+     ==> WF_GRAPH g'`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[GENERATE_POLYGON_EXEC; MEM_MAP; MEM_FILTER] THEN
+  STRIP_TAC THEN ASM_REWRITE_TAC[] THEN
+  FIRST_X_ASSUM(X_CHOOSE_THEN `rest:num list` SUBST_ALL_TAC o
+    MATCH_MP ENUMERATOR_CONS_0) THEN
+  MATCH_MP_TAC WF_GRAPH_SUBDIV_FACE THEN ASM_REWRITE_TAC[]);;
+
+let WF_GRAPH_NEXT_PLANE = prove
+ (`!p g g'. WF_GRAPH g /\ MEM g' (NEXT_PLANE p g) ==> WF_GRAPH g'`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[NEXT_PLANE_EXEC'] THEN
+  COND_CASES_TAC THEN REWRITE_TAC[MEM; MEM_FLAT; MEM_MAP] THEN
+  STRIP_TAC THEN
+  FIRST_X_ASSUM(MP_TAC o check (is_eq o concl)) THEN
+  DISCH_THEN SUBST_ALL_TAC THEN
+  SUBGOAL_THEN `MEM (MINIMAL_FACE (NON_FINALS g)) (FACES g)` ASSUME_TAC THENL
+   [REWRITE_TAC[MINIMAL_FACE] THEN
+    ASM_MESON_TAC[MEM_MINIMAL_EL; MEM_NON_FINALS; NULL_EQ_NIL];
+    ALL_TAC] THEN
+  SUBGOAL_THEN
+   `MEM (MINIMAL_VERTEX g (MINIMAL_FACE (NON_FINALS g)))
+        (VERTICES (MINIMAL_FACE (NON_FINALS g)))`
+  ASSUME_TAC THENL
+   [REWRITE_TAC[MINIMAL_VERTEX] THEN MATCH_MP_TAC MEM_MINIMAL_EL THEN
+    UNDISCH_TAC `WF_GRAPH g` THEN REWRITE_TAC[WF_GRAPH; GSYM ALL_MEM] THEN
+    ASM_MESON_TAC[NULL_EQ_NIL];
+    ASM_MESON_TAC[WF_GRAPH_GENERATE_POLYGON]]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Every reachable graph.                                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let WF_GRAPH_REACH = prove
+ (`!p g. REACH p (SEED p) g ==> WF_GRAPH g`,
+  REPEAT GEN_TAC THEN DISCH_TAC THEN
+  MP_TAC(ISPECL [`p:num`; `WF_GRAPH`] REACH_INDUCT) THEN
+  ASM_MESON_TAC[WF_GRAPH_NEXT_PLANE; WF_GRAPH_SEED]);;
+end;;

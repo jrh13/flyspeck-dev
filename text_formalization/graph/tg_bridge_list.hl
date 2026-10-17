@@ -1,0 +1,245 @@
+(* ========================================================================= *)
+(* tame/tame_bridge_list.ml -- Hales' list-level functions (hales_defs.ml)   *)
+(* coincide with ours (tame_list.ml, tame_enum.ml, tame_tame.ml): every      *)
+(* statement is an unconditional equation between a Flyspeck constant and   *)
+(* the corresponding package constant.  Nearly all proofs are inductions    *)
+(* over the list argument rewriting with both sets of defining clauses; the *)
+(* shapes differ only where Hales' definitions test the tail for [] and     *)
+(* use HD/TL (nextElem, containsUnacceptableEdge(Snd)), which is handled   *)
+(* by a case split on the tail.                                              *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_bridge_defs.hl";;
+
+module Tg_bridge_list = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+
+(* ------------------------------------------------------------------------- *)
+(* Basic list combinators: cat, flatten, map, sumn.                          *)
+(* ------------------------------------------------------------------------- *)
+
+let H_CAT = prove
+ (`!l1 l2:A list. cat l1 l2 = APPEND l1 l2`,
+  LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[h_cat; APPEND]);;
+
+let H_FLATTEN = prove
+ (`!l:(A list)list. flatten l = FLAT l`,
+  REWRITE_TAC[h_flatten] THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[h_foldr; FLAT; H_CAT]);;
+
+let H_MAP = prove
+ (`!(f:A->B) l. map f l = MAP f l`,
+  GEN_TAC THEN LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[h_map; MAP]);;
+
+let H_SUMN = prove
+ (`!(f:A->num) l. sumn (MAP f l) = LIST_SUM f l`,
+  GEN_TAC THEN REWRITE_TAC[h_sumn] THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[h_foldr; MAP; LIST_SUM]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Function iteration and integer ranges.                                    *)
+(* ------------------------------------------------------------------------- *)
+
+let H_POWER_ITER = prove
+ (`!(f:A->A) n x. (f POWER n) x = ITER n f x`,
+  GEN_TAC THEN INDUCT_TAC THEN
+  ASM_REWRITE_TAC[h_POWER; ITER_ALT; I_THM; o_THM]);;
+
+let H_IOTA = prove
+ (`!m n. iota m n = UPT_REC n m`,
+  ONCE_REWRITE_TAC[SWAP_FORALL_THM] THEN INDUCT_TAC THEN
+  ASM_REWRITE_TAC[h_iota; UPT_REC]);;
+
+let H_UPT = prove
+ (`!i j. upt i j = UPT i j`,
+  REWRITE_TAC[h_upt; UPT; H_IOTA]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Replacement, rotation, splitting, the segment between two elements.       *)
+(* ------------------------------------------------------------------------- *)
+
+let H_REPLACE = prove
+ (`!(x:A) ys zs. replace x ys zs = REPLACE x ys zs`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[h_replace; REPLACE]);;
+
+let H_ROTATE1 = prove
+ (`!l:A list. rotate1 l = ROTATE1 l`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[h_rotate1; ROTATE1]);;
+
+let H_ROTATE = prove
+ (`!n (l:A list). rotate n l = ROTATE n l`,
+  SUBGOAL_THEN `rotate1 = (ROTATE1:A list->A list)`
+   (fun th -> REWRITE_TAC[h_rotate; ROTATE; th]) THEN
+  REWRITE_TAC[FUN_EQ_THM; H_ROTATE1]);;
+
+let H_SPLIT_AT_REC = prove
+ (`!(c:A) bs l. split_at_rec c bs l = SPLIT_AT_REC c bs l`,
+  GEN_TAC THEN ONCE_REWRITE_TAC[SWAP_FORALL_THM] THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[h_split_at_rec; SPLIT_AT_REC]);;
+
+let H_SPLIT_AT = prove
+ (`!(c:A) l. split_at c l = SPLIT_AT c l`,
+  REWRITE_TAC[h_split_at; SPLIT_AT; H_SPLIT_AT_REC]);;
+
+let H_BETWN = prove
+ (`!(vs:A list) r1 r2. betwn vs r1 r2 = BETWEEN vs r1 r2`,
+  REWRITE_TAC[h_betwn; BETWEEN; H_SPLIT_AT; IN_SET_OF_LIST]);;
+
+(* ------------------------------------------------------------------------- *)
+(* nextElem: Hales tests the tail for [] and uses HD where NEXT_ELEM has a   *)
+(* separate clause for a two-element prefix.                                 *)
+(* ------------------------------------------------------------------------- *)
+
+let H_NEXTELEM = prove
+ (`!(l:A list) b x. nextElem l b x = NEXT_ELEM l b x`,
+  LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[h_nextElem; NEXT_ELEM] THEN
+  REPEAT GEN_TAC THEN STRUCT_CASES_TAC(ISPEC `t:A list` list_CASES) THEN
+  REWRITE_TAC[NEXT_ELEM; HD; NOT_CONS_NIL; COND_ID]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Positional update, mapAt, hiding consecutive duplicates.                  *)
+(* ------------------------------------------------------------------------- *)
+
+let H_LIST_UPDATE = prove
+ (`!(l:A list) i v. list_update l i v = LIST_UPDATE l i v`,
+  LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[h_list_update; LIST_UPDATE]);;
+
+let H_MAPAT = prove
+ (`!ns (f:A->A) l. mapAt ns f l = MAP_AT ns f l`,
+  LIST_INDUCT_TAC THEN ASM_REWRITE_TAC[h_mapAt; MAP_AT; H_LIST_UPDATE]);;
+
+let H_HIDEDUPSREC = prove
+ (`!(a:A) l. hideDupsRec a l = HIDE_DUPS_REC a l`,
+  ONCE_REWRITE_TAC[SWAP_FORALL_THM] THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[h_hideDupsRec; HIDE_DUPS_REC]);;
+
+let H_HIDEDUPS = prove
+ (`!l:A list. hideDups l = HIDE_DUPS l`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[h_hideDups; HIDE_DUPS; H_HIDEDUPSREC]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The option projection and the minimal element.                            *)
+(* ------------------------------------------------------------------------- *)
+
+let H_THE = prove
+ (`!x:A. the (SOME x) = x`,
+  GEN_TAC THEN REWRITE_TAC[h_the; option_INJ] THEN
+  MATCH_MP_TAC SELECT_UNIQUE THEN REWRITE_TAC[] THEN MESON_TAC[]);;
+
+let H_MINIMAL_EL = prove
+ (`!(f:A->num) x xs. minimal_el f (CONS x xs) = MINIMAL_EL f (CONS x xs)`,
+  GEN_TAC THEN ONCE_REWRITE_TAC[SWAP_FORALL_THM] THEN LIST_INDUCT_TAC THEN
+  ONCE_REWRITE_TAC[h_minimal_el; MINIMAL_EL] THEN
+  ASM_REWRITE_TAC[NOT_CONS_NIL]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The enumerator of index lists.                                            *)
+(* ------------------------------------------------------------------------- *)
+
+let H_ENUMBASE = prove
+ (`!n. enumBase n = ENUM_BASE n`,
+  REWRITE_TAC[h_enumBase; ENUM_BASE; H_UPT]);;
+
+let H_ENUMAPPEND = prove
+ (`!n l. enumAppend n l = ENUM_APPEND n l`,
+  REWRITE_TAC[h_enumAppend; ENUM_APPEND; H_UPT; H_FLATTEN]);;
+
+let H_ENUMERATOR = prove
+ (`!inner outer. enumerator inner outer = ENUMERATOR inner outer`,
+  SUBGOAL_THEN `enumAppend = ENUM_APPEND`
+   (fun th -> REWRITE_TAC[h_enumerator; ENUMERATOR; H_POWER_ITER;
+                          H_ENUMBASE; th]) THEN
+  REWRITE_TAC[FUN_EQ_THM; H_ENUMAPPEND]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Congruence of cyclic lists and injectivity on a set.                      *)
+(* ------------------------------------------------------------------------- *)
+
+let H_CONG = prove
+ (`!xs ys:A list. __cong xs ys <=> CONG xs ys`,
+  REWRITE_TAC[h_cong; CONG; H_ROTATE]);;
+
+let H_INJ_ON = prove
+ (`!(f:A->B) s. inj_on f s <=> INJ_ON f s`,
+  REWRITE_TAC[h_inj_on; INJ_ON; IN]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Heights of new vertices and the unacceptable-edge tests (the latter       *)
+(* again test the tail for [] and use HD/TL in Hales' version).              *)
+(* ------------------------------------------------------------------------- *)
+
+let H_HEIGHTSNEWVERTICES = prove
+ (`!h1 h2 n. heightsNewVertices h1 h2 n = HEIGHTS_NEW_VERTICES h1 h2 n`,
+  REWRITE_TAC[h_heightsNewVertices; HEIGHTS_NEW_VERTICES; H_UPT]);;
+
+let H_CUESND = prove
+ (`!N v ws. containsUnacceptableEdgeSnd N v ws <=>
+            CONTAINS_UNACCEPTABLE_EDGE_SND N v ws`,
+  GEN_TAC THEN ONCE_REWRITE_TAC[SWAP_FORALL_THM] THEN LIST_INDUCT_TAC THEN
+  ASM_REWRITE_TAC[h_containsUnacceptableEdgeSnd;
+                  CONTAINS_UNACCEPTABLE_EDGE_SND] THEN
+  GEN_TAC THEN STRUCT_CASES_TAC(ISPEC `t:num list` list_CASES) THEN
+  REWRITE_TAC[CONTAINS_UNACCEPTABLE_EDGE_SND; NOT_CONS_NIL; HD; TL;
+              LET_DEF; LET_END_DEF]);;
+
+let H_CUE = prove
+ (`!N vs. containsUnacceptableEdge N vs <=> CONTAINS_UNACCEPTABLE_EDGE N vs`,
+  REPEAT GEN_TAC THEN STRUCT_CASES_TAC(ISPEC `vs:num list` list_CASES) THEN
+  REWRITE_TAC[h_containsUnacceptableEdge; CONTAINS_UNACCEPTABLE_EDGE] THEN
+  STRUCT_CASES_TAC(ISPEC `t:num list` list_CASES) THEN
+  REWRITE_TAC[CONTAINS_UNACCEPTABLE_EDGE; NOT_CONS_NIL; HD; TL;
+              LET_DEF; LET_END_DEF; H_CUESND]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Notation constants and the numerical constants of tameness.               *)
+(* ------------------------------------------------------------------------- *)
+
+let H_C_EL = prove
+ (`!(l:A list) n. #!# l n = EL n l`,
+  REWRITE_TAC[h_C_EL]);;
+
+let H_NOT_EQUAL = prove
+ (`!(x:A) y. (~=) x y <=> ~(x = y)`,
+  REWRITE_TAC[h_not_equal]);;
+
+let H_SQUANDERTARGET = prove
+ (`squanderTarget = SQUANDER_TARGET`,
+  REWRITE_TAC[h_squanderTarget; SQUANDER_TARGET]);;
+
+let H_EXCESSTCOUNT = prove
+ (`excessTCount = EXCESS_T_COUNT`,
+  REWRITE_TAC[h_excessTCount; EXCESS_T_COUNT]);;
+
+let H_SQUANDERVERTEX = prove
+ (`!p q. squanderVertex p q = SQUANDER_VERTEX p q`,
+  REWRITE_TAC[h_squanderVertex; SQUANDER_VERTEX; H_SQUANDERTARGET]);;
+
+let H_SQUANDERFACE = prove
+ (`!n. squanderFace n = SQUANDER_FACE n`,
+  REWRITE_TAC[h_squanderFace; SQUANDER_FACE; H_SQUANDERTARGET]);;
+
+let H_MAXGON = prove
+ (`!p. maxGon p = MAX_GON p`,
+  REWRITE_TAC[h_maxGon; MAX_GON]);;
+end;;

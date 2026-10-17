@@ -1,0 +1,383 @@
+(* ========================================================================= *)
+(* tame/tame_enum_fast2.ml -- faster executable form of POLY_VLISTS, second  *)
+(* step: the duplicate-edge filter decides adjacency by positions on the     *)
+(* rotated vertex list instead of two BETWEEN computations per pair, and the *)
+(* neighbour lists of the face vertices are computed once.  Proved version   *)
+(* (agent efast2): the four definitions and the statement of the skeleton    *)
+(* are kept verbatim.                                                        *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_lbthm.hl";;
+flyspeck_needs "graph/tg_isothm.hl";;
+flyspeck_needs "graph/tg_enum_props.hl";;
+flyspeck_needs "graph/tg_enum_fast.hl";;
+
+module Tg_enum_fast2 = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+open Tg_arcs;;
+open Tg_split_inv;;
+open Tg_enum_props;;
+open Tg_subdiv_inv;;
+open Tg_xlbthm;;
+open Tg_xdriver_lemmas;;
+open Tg_enum_fast;;
+
+(* positions i < j on rot = ROTATE_TO v (VERTICES f) and nbrs =             *)
+(* MAP (NEIGHBORS g) rot: directed lengths j - i and LENGTH rot - (j - i)    *)
+let DUP_EDGE_IDX = new_definition
+ `DUP_EDGE_IDX (rot:num list) (nbrs:(num list)list) i j <=>
+    2 <= j - i /\ 2 <= LENGTH rot - (j - i) /\ MEM (EL j rot) (EL i nbrs)`;;
+
+let CONTAINS_DUPLICATE_EDGE_IDX = new_definition
+ `CONTAINS_DUPLICATE_EDGE_IDX rot nbrs is <=>
+    CONTAINS_UNACCEPTABLE_EDGE (\i j. DUP_EDGE_IDX rot nbrs i j) is`;;
+
+let PV_FAST2 = new_definition
+ `PV_FAST2 rot nbrs iss =
+    MAP (IVL_FAST rot)
+        (FILTER (\is. ~CONTAINS_DUPLICATE_EDGE_IDX rot nbrs is) iss)`;;
+
+let POLY_VLISTS_FAST2 = new_definition
+ `POLY_VLISTS_FAST2 n v f g =
+    PV_FAST2 (ROTATE_TO v (VERTICES f))
+             (MAP (NEIGHBORS g) (ROTATE_TO v (VERTICES f)))
+             (ENUMERATOR n (LENGTH (VERTICES f)))`;;
+
+(* ------------------------------------------------------------------------- *)
+(* List lemmas: FILTER only looks at members; the elements of positions      *)
+(* i < j split a list into five pieces of known lengths.                     *)
+(* ------------------------------------------------------------------------- *)
+
+let FILTER_MEM_CONG = prove
+ (`!P Q (l:A list).
+     (!x. MEM x l ==> (P x <=> Q x)) ==> FILTER P l = FILTER Q l`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
+  REWRITE_TAC[FILTER; MEM] THEN STRIP_TAC THEN
+  SUBGOAL_THEN `FILTER (P:A->bool) t = FILTER Q t` SUBST1_TAC THENL
+   [FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_MESON_TAC[]; ALL_TAC] THEN
+  SUBGOAL_THEN `(P:A->bool) h <=> Q h` SUBST1_TAC THENL
+   [ASM_MESON_TAC[]; REWRITE_TAC[]]);;
+
+let EL_DECOMP = prove
+ (`!l:A list i. i < LENGTH l
+                ==> ?P x S. l = APPEND P (CONS x S) /\ LENGTH P = i /\
+                            EL i l = x`,
+  LIST_INDUCT_TAC THEN REWRITE_TAC[LENGTH; CONJUNCT1 LT] THEN
+  X_GEN_TAC `i:num` THEN STRUCT_CASES_TAC(SPEC `i:num` num_CASES) THENL
+   [DISCH_TAC THEN MAP_EVERY EXISTS_TAC [`[]:A list`; `h:A`; `t:A list`] THEN
+    REWRITE_TAC[EL; HD; APPEND; LENGTH];
+    REWRITE_TAC[LT_SUC; EL; TL] THEN DISCH_TAC THEN
+    FIRST_X_ASSUM(MP_TAC o SPEC `n:num`) THEN ASM_REWRITE_TAC[] THEN
+    DISCH_THEN(X_CHOOSE_THEN `P:A list` (X_CHOOSE_THEN `x:A`
+      (X_CHOOSE_THEN `S:A list` STRIP_ASSUME_TAC))) THEN
+    MAP_EVERY EXISTS_TAC [`CONS (h:A) P`; `x:A`; `S:A list`] THEN
+    ASM_REWRITE_TAC[APPEND; LENGTH]]);;
+
+let EL_DECOMP2 = prove
+ (`!l:A list i j.
+     i < j /\ j < LENGTH l
+     ==> ?P1 a P2 b S. l = APPEND P1 (CONS a (APPEND P2 (CONS b S))) /\
+                       LENGTH P1 = i /\ LENGTH P2 = j - i - 1 /\
+                       EL i l = a /\ EL j l = b`,
+  REPEAT STRIP_TAC THEN
+  MP_TAC(ISPECL [`l:A list`; `i:num`] EL_DECOMP) THEN
+  ANTS_TAC THENL [ASM_ARITH_TAC; ALL_TAC] THEN
+  DISCH_THEN(X_CHOOSE_THEN `P1:A list` (X_CHOOSE_THEN `a:A`
+    (X_CHOOSE_THEN `S1:A list`
+      (CONJUNCTS_THEN2 SUBST_ALL_TAC STRIP_ASSUME_TAC)))) THEN
+  MP_TAC(ISPECL [`S1:A list`; `j - i - 1`] EL_DECOMP) THEN
+  ANTS_TAC THENL
+   [RULE_ASSUM_TAC(REWRITE_RULE[LENGTH_APPEND; LENGTH]) THEN ASM_ARITH_TAC;
+    ALL_TAC] THEN
+  DISCH_THEN(X_CHOOSE_THEN `P2:A list` (X_CHOOSE_THEN `b:A`
+    (X_CHOOSE_THEN `S:A list`
+      (CONJUNCTS_THEN2 SUBST_ALL_TAC STRIP_ASSUME_TAC)))) THEN
+  MAP_EVERY EXISTS_TAC
+   [`P1:A list`; `a:A`; `P2:A list`; `b:A`; `S:A list`] THEN
+  SUBGOAL_THEN `~(j < i) /\ ~(j - i = 0)` STRIP_ASSUME_TAC THENL
+   [ASM_ARITH_TAC; ALL_TAC] THEN
+  ASM_REWRITE_TAC[EL_APPEND; EL_CONS; LT_REFL; SUB_REFL]);;
+
+(* ------------------------------------------------------------------------- *)
+(* BETWEEN on a list without repetitions: the forward arc from u to w is the *)
+(* prefix of the cyclic continuation after u (ROT_TO + BETWEEN_CYCLIC), so   *)
+(* BETWEEN is invariant under rotation: BETWEEN (APPEND Q P) = BETWEEN       *)
+(* (APPEND P Q) on members a, b with a different from b.                     *)
+(* ------------------------------------------------------------------------- *)
+
+let BETWEEN_CYCLIC_FWD = prove
+ (`!P (u:A) S R1 w R2.
+     DISTINCT (APPEND P (CONS u S)) /\ APPEND S P = APPEND R1 (CONS w R2)
+     ==> BETWEEN (APPEND P (CONS u S)) u w = R1`,
+  REPEAT STRIP_TAC THEN
+  MP_TAC(ISPECL [`R1:A list`; `P:A list`; `u:A`; `S:A list`; `w:A`;
+                 `R2:A list`; `APPEND P (CONS (u:A) S)`] ROT_TO) THEN
+  ASM_REWRITE_TAC[] THEN
+  DISCH_THEN(X_CHOOSE_THEN `P':A list` (X_CHOOSE_THEN `S':A list`
+    (CONJUNCTS_THEN2 SUBST_ALL_TAC ASSUME_TAC))) THEN
+  MP_TAC(ISPECL [`P':A list`; `w:A`; `S':A list`; `R2:A list`; `u:A`;
+                 `R1:A list`] BETWEEN_CYCLIC) THEN
+  ASM_REWRITE_TAC[]);;
+
+let BETWEEN_APPEND_SWAP_LEFT = prove
+ (`!P Q (a:A) b.
+     DISTINCT (APPEND P Q) /\ MEM a P /\ MEM b (APPEND P Q) /\ ~(a = b)
+     ==> BETWEEN (APPEND Q P) a b = BETWEEN (APPEND P Q) a b`,
+  REPEAT STRIP_TAC THEN
+  SUBGOAL_THEN `DISTINCT (APPEND Q P:A list)` ASSUME_TAC THENL
+   [ASM_MESON_TAC[DISTINCT_APPEND_SYM]; ALL_TAC] THEN
+  UNDISCH_TAC `MEM (a:A) P` THEN
+  DISCH_THEN(X_CHOOSE_THEN `P1:A list` (X_CHOOSE_THEN `P2:A list`
+    SUBST_ALL_TAC) o MATCH_MP MEM_SPLIT) THEN
+  SUBGOAL_THEN
+   `APPEND (APPEND P1 (CONS (a:A) P2)) Q =
+    APPEND P1 (CONS a (APPEND P2 Q)) /\
+    APPEND Q (APPEND P1 (CONS (a:A) P2)) = APPEND (APPEND Q P1) (CONS a P2)`
+   (CONJUNCTS_THEN SUBST_ALL_TAC) THENL
+   [REWRITE_TAC[GSYM APPEND_ASSOC; APPEND]; ALL_TAC] THEN
+  SUBGOAL_THEN `MEM (b:A) (APPEND (APPEND P2 Q) P1)` MP_TAC THENL
+   [UNDISCH_TAC `MEM (b:A) (APPEND P1 (CONS a (APPEND P2 Q)))` THEN
+    REWRITE_TAC[MEM_APPEND; MEM] THEN ASM_MESON_TAC[];
+    DISCH_THEN(X_CHOOSE_THEN `R1:A list` (X_CHOOSE_THEN `R2:A list`
+      ASSUME_TAC) o MATCH_MP MEM_SPLIT)] THEN
+  MP_TAC(ISPECL [`P1:A list`; `a:A`; `APPEND P2 Q:A list`; `R1:A list`;
+                 `b:A`; `R2:A list`] BETWEEN_CYCLIC_FWD) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN SUBST1_TAC THEN
+  MP_TAC(ISPECL [`APPEND Q P1:A list`; `a:A`; `P2:A list`; `R1:A list`;
+                 `b:A`; `R2:A list`] BETWEEN_CYCLIC_FWD) THEN
+  ASM_REWRITE_TAC[APPEND_ASSOC]);;
+
+let BETWEEN_APPEND_SWAP = prove
+ (`!P Q (a:A) b.
+     DISTINCT (APPEND P Q) /\ MEM a (APPEND P Q) /\ MEM b (APPEND P Q) /\
+     ~(a = b)
+     ==> BETWEEN (APPEND Q P) a b = BETWEEN (APPEND P Q) a b`,
+  REPEAT STRIP_TAC THEN
+  UNDISCH_TAC `MEM (a:A) (APPEND P Q)` THEN REWRITE_TAC[MEM_APPEND] THEN
+  STRIP_TAC THENL
+   [MATCH_MP_TAC BETWEEN_APPEND_SWAP_LEFT THEN ASM_REWRITE_TAC[];
+    CONV_TAC SYM_CONV THEN MATCH_MP_TAC BETWEEN_APPEND_SWAP_LEFT THEN
+    ASM_REWRITE_TAC[] THEN CONJ_TAC THENL
+     [ASM_MESON_TAC[DISTINCT_APPEND_SYM];
+      UNDISCH_TAC `MEM (b:A) (APPEND P Q)` THEN
+      REWRITE_TAC[MEM_APPEND] THEN MESON_TAC[]]]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The arcs between the elements of positions i < j of the rotation          *)
+(* APPEND Q P of the list APPEND P Q have lengths j - i - 1 and              *)
+(* LENGTH - (j - i) - 1 (BETWEEN_BEFORE, BETWEEN_AFTER on the rotation).     *)
+(* ------------------------------------------------------------------------- *)
+
+let BETWEEN_EL_ROT = prove
+ (`!P Q i j.
+     DISTINCT (APPEND P Q:A list) /\ i < j /\ j < LENGTH (APPEND P Q)
+     ==> LENGTH (BETWEEN (APPEND P Q) (EL i (APPEND Q P))
+                         (EL j (APPEND Q P))) = j - i - 1 /\
+         LENGTH (BETWEEN (APPEND P Q) (EL j (APPEND Q P))
+                         (EL i (APPEND Q P))) =
+         LENGTH (APPEND P Q) - (j - i) - 1`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  SUBGOAL_THEN `DISTINCT (APPEND Q P:A list)` ASSUME_TAC THENL
+   [ASM_MESON_TAC[DISTINCT_APPEND_SYM]; ALL_TAC] THEN
+  SUBGOAL_THEN `LENGTH (APPEND Q P:A list) = LENGTH (APPEND P Q)`
+  ASSUME_TAC THENL [REWRITE_TAC[LENGTH_APPEND] THEN ARITH_TAC; ALL_TAC] THEN
+  MP_TAC(ISPECL [`APPEND Q P:A list`; `i:num`; `j:num`] EL_DECOMP2) THEN
+  ASM_REWRITE_TAC[] THEN
+  DISCH_THEN(X_CHOOSE_THEN `P1:A list` (X_CHOOSE_THEN `a:A`
+    (X_CHOOSE_THEN `P2:A list` (X_CHOOSE_THEN `b:A`
+      (X_CHOOSE_THEN `S:A list` STRIP_ASSUME_TAC))))) THEN
+  MAP_EVERY (fun t -> UNDISCH_TAC t THEN DISCH_THEN SUBST1_TAC)
+   [`EL i (APPEND Q P) = (a:A)`; `EL j (APPEND Q P) = (b:A)`] THEN
+  SUBGOAL_THEN `MEM (a:A) (APPEND P Q) /\ MEM (b:A) (APPEND P Q)`
+  STRIP_ASSUME_TAC THENL
+   [SUBGOAL_THEN `MEM (a:A) (APPEND Q P) /\ MEM (b:A) (APPEND Q P)`
+    MP_TAC THENL
+     [ASM_REWRITE_TAC[] THEN REWRITE_TAC[MEM_APPEND; MEM];
+      REWRITE_TAC[MEM_APPEND] THEN MESON_TAC[]];
+    ALL_TAC] THEN
+  SUBGOAL_THEN `DISTINCT (APPEND P1 (CONS (a:A) (APPEND P2 (CONS b S))))`
+  ASSUME_TAC THENL
+   [UNDISCH_TAC `DISTINCT (APPEND Q P:A list)` THEN ASM_REWRITE_TAC[];
+    ALL_TAC] THEN
+  SUBGOAL_THEN `~(a:A = b) /\ ~(b:A = a)` STRIP_ASSUME_TAC THENL
+   [MP_TAC(ISPECL [`P1:A list`; `a:A`; `APPEND P2 (CONS (b:A) S)`]
+      DISTINCT_APPEND_CONS_NOT_MEM) THEN
+    ASM_REWRITE_TAC[MEM_APPEND; MEM] THEN MESON_TAC[];
+    ALL_TAC] THEN
+  MP_TAC(ISPECL [`P:A list`; `Q:A list`; `a:A`; `b:A`]
+    BETWEEN_APPEND_SWAP) THEN
+  MP_TAC(ISPECL [`P:A list`; `Q:A list`; `b:A`; `a:A`]
+    BETWEEN_APPEND_SWAP) THEN
+  ASM_REWRITE_TAC[] THEN
+  DISCH_THEN(SUBST1_TAC o SYM) THEN DISCH_THEN(SUBST1_TAC o SYM) THEN
+  ASM_SIMP_TAC[BETWEEN_BEFORE; BETWEEN_AFTER] THEN
+  UNDISCH_TAC `LENGTH (APPEND Q P:A list) = LENGTH (APPEND P Q)` THEN
+  ASM_REWRITE_TAC[] THEN REWRITE_TAC[LENGTH_APPEND; LENGTH] THEN
+  ASM_ARITH_TAC);;
+
+(* ------------------------------------------------------------------------- *)
+(* The index filter agrees with DUPLICATE_EDGE on positions i < j of         *)
+(* rot = ROTATE_TO v (VERTICES f) = APPEND Q P for VERTICES f = APPEND P Q   *)
+(* (SPLIT_AT_LIN_MEM_APPEND): the directed lengths are j - i and             *)
+(* LENGTH rot - (j - i), and EL i (MAP (NEIGHBORS g) rot) = NEIGHBORS g      *)
+(* (EL i rot).                                                               *)
+(* ------------------------------------------------------------------------- *)
+
+let DUP_EDGE_IDX_EQ = prove
+ (`!g f v i j.
+     DISTINCT (VERTICES f) /\ MEM v (VERTICES f) /\ i < j /\
+     j < LENGTH (VERTICES f)
+     ==> (DUP_EDGE_IDX (ROTATE_TO v (VERTICES f))
+                       (MAP (NEIGHBORS g) (ROTATE_TO v (VERTICES f))) i j <=>
+          DUPLICATE_EDGE g f (NEXT_VERTICES f i v) (NEXT_VERTICES f j v))`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  SUBGOAL_THEN `i < LENGTH (VERTICES f)` ASSUME_TAC THENL
+   [ASM_ARITH_TAC; ALL_TAC] THEN
+  SUBGOAL_THEN
+   `NEXT_VERTICES f i v = EL i (ROTATE_TO v (VERTICES f)) /\
+    NEXT_VERTICES f j v = EL j (ROTATE_TO v (VERTICES f))`
+   (CONJUNCTS_THEN SUBST1_TAC) THENL
+   [CONJ_TAC THEN MATCH_MP_TAC NEXT_VERTICES_ROTATE_TO THEN
+    ASM_REWRITE_TAC[];
+    ALL_TAC] THEN
+  SUBGOAL_THEN
+   `DISTINCT (ROTATE_TO v (VERTICES f)) /\
+    LENGTH (ROTATE_TO v (VERTICES f)) = LENGTH (VERTICES f)`
+  STRIP_ASSUME_TAC THENL
+   [MP_TAC(ISPECL [`VERTICES f`; `v:num`] ROTATE_TO_ROTATE) THEN
+    ASM_REWRITE_TAC[] THEN DISCH_THEN(SUBST1_TAC o SYM) THEN
+    ASM_REWRITE_TAC[DISTINCT_ROTATE; LENGTH_ROTATE];
+    ALL_TAC] THEN
+  MP_TAC(ISPECL [`FST (SPLIT_AT_LIN (v:num) (VERTICES f))`;
+                 `CONS (v:num) (SND (SPLIT_AT_LIN v (VERTICES f)))`;
+                 `i:num`; `j:num`] BETWEEN_EL_ROT) THEN
+  ASM_SIMP_TAC[SPLIT_AT_LIN_MEM_APPEND; GSYM ROTATE_TO] THEN STRIP_TAC THEN
+  SUBGOAL_THEN
+   `~(EL i (ROTATE_TO v (VERTICES f)) = EL j (ROTATE_TO v (VERTICES f))) /\
+    ~(EL j (ROTATE_TO v (VERTICES f)) = EL i (ROTATE_TO v (VERTICES f)))`
+  STRIP_ASSUME_TAC THENL
+   [MP_TAC(ISPECL [`ROTATE_TO v (VERTICES f)`; `i:num`; `j:num`]
+      DISTINCT_EL_INJ) THEN
+    ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[LT_REFL];
+    ALL_TAC] THEN
+  ASM_SIMP_TAC[DUP_EDGE_IDX; DUPLICATE_EDGE; DIRECTED_LENGTH; EL_MAP] THEN
+  MATCH_MP_TAC(TAUT
+    `(a <=> a') /\ (b <=> b') ==> (a /\ b /\ c <=> a' /\ b' /\ c)`) THEN
+  CONJ_TAC THEN ASM_ARITH_TAC);;
+
+(* ------------------------------------------------------------------------- *)
+(* CONTAINS_UNACCEPTABLE_EDGE only applies the test to consecutive members   *)
+(* x < y of the list.                                                        *)
+(* ------------------------------------------------------------------------- *)
+
+let CUE_SND_CONG = prove
+ (`!nb1 nb2 l.
+     (!x y. MEM x l /\ MEM y l /\ x < y ==> (nb1 x y <=> nb2 x y))
+     ==> !v. CONTAINS_UNACCEPTABLE_EDGE_SND nb1 v l <=>
+             CONTAINS_UNACCEPTABLE_EDGE_SND nb2 v l`,
+  GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THENL
+   [REWRITE_TAC[CONTAINS_UNACCEPTABLE_EDGE_SND]; ALL_TAC] THEN
+  POP_ASSUM MP_TAC THEN STRUCT_CASES_TAC(ISPEC `t:num list` list_CASES) THENL
+   [REWRITE_TAC[CONTAINS_UNACCEPTABLE_EDGE_SND]; ALL_TAC] THEN
+  DISCH_TAC THEN DISCH_TAC THEN X_GEN_TAC `v:num` THEN
+  REWRITE_TAC[CONTAINS_UNACCEPTABLE_EDGE_SND] THEN
+  SUBGOAL_THEN
+   `!v. CONTAINS_UNACCEPTABLE_EDGE_SND nb1 v (CONS h' t') <=>
+        CONTAINS_UNACCEPTABLE_EDGE_SND nb2 v (CONS h' t')`
+   (fun th -> REWRITE_TAC[th]) THENL
+   [FIRST_X_ASSUM MATCH_MP_TAC THEN REWRITE_TAC[MEM] THEN ASM_MESON_TAC[MEM];
+    ALL_TAC] THEN
+  ASM_CASES_TAC `h < h'` THEN ASM_REWRITE_TAC[] THEN
+  SUBGOAL_THEN `(nb1:num->num->bool) h h' <=> nb2 h h'`
+   (fun th -> REWRITE_TAC[th]) THEN
+  FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[MEM]);;
+
+let CUE_CONG = prove
+ (`!nb1 nb2 l.
+     (!x y. MEM x l /\ MEM y l /\ x < y ==> (nb1 x y <=> nb2 x y))
+     ==> (CONTAINS_UNACCEPTABLE_EDGE nb1 l <=>
+          CONTAINS_UNACCEPTABLE_EDGE nb2 l)`,
+  REPEAT GEN_TAC THEN STRUCT_CASES_TAC(ISPEC `l:num list` list_CASES) THEN
+  REWRITE_TAC[CONTAINS_UNACCEPTABLE_EDGE] THEN
+  STRUCT_CASES_TAC(ISPEC `t:num list` list_CASES) THEN
+  REWRITE_TAC[CONTAINS_UNACCEPTABLE_EDGE] THEN DISCH_TAC THEN
+  MP_TAC(ISPECL [`nb1:num->num->bool`; `nb2:num->num->bool`;
+                 `CONS (h':num) t'`] CUE_SND_CONG) THEN
+  ANTS_TAC THENL [REWRITE_TAC[MEM] THEN ASM_MESON_TAC[MEM]; ALL_TAC] THEN
+  DISCH_THEN(fun th -> REWRITE_TAC[th]) THEN
+  ASM_CASES_TAC `h < h'` THEN ASM_REWRITE_TAC[] THEN
+  SUBGOAL_THEN `(nb1:num->num->bool) h h' <=> nb2 h h'`
+   (fun th -> REWRITE_TAC[th]) THEN
+  FIRST_X_ASSUM MATCH_MP_TAC THEN ASM_REWRITE_TAC[MEM]);;
+
+(* ------------------------------------------------------------------------- *)
+(* The theorem of the skeleton (statement unchanged): POLY_VLISTS_FAST_EQ    *)
+(* reduces it to the two FILTER predicates agreeing on the members of the    *)
+(* ENUMERATOR, whose indices are below LENGTH (VERTICES f) (ENUMERATOR_MEM). *)
+(* ------------------------------------------------------------------------- *)
+
+let POLY_VLISTS_FAST2_EQ = prove
+ (`!g f v n. GRAPH_INV g /\ MEM f (FACES g) /\ MEM v (VERTICES f) /\ 3 <= n
+             ==> POLY_VLISTS n v f g = POLY_VLISTS_FAST2 n v f g`,
+  REPEAT STRIP_TAC THEN
+  SUBGOAL_THEN `DISTINCT (VERTICES f) /\ 3 <= LENGTH (VERTICES f)`
+  STRIP_ASSUME_TAC THENL
+   [UNDISCH_TAC `GRAPH_INV g` THEN
+    REWRITE_TAC[GRAPH_INV; FACES_SIMPLE; GSYM ALL_MEM] THEN
+    DISCH_THEN(MP_TAC o SPEC `f:face` o CONJUNCT1 o CONJUNCT2 o
+               CONJUNCT2) THEN
+    ASM_REWRITE_TAC[];
+    ALL_TAC] THEN
+  MP_TAC(SPECL [`g:graph`; `f:face`; `v:num`; `n:num`]
+    POLY_VLISTS_FAST_EQ) THEN
+  ASM_REWRITE_TAC[] THEN DISCH_THEN SUBST1_TAC THEN
+  REWRITE_TAC[POLY_VLISTS_FAST; POLY_VLISTS_FAST2; PV_FAST2] THEN
+  AP_TERM_TAC THEN MATCH_MP_TAC FILTER_MEM_CONG THEN
+  X_GEN_TAC `is:num list` THEN DISCH_TAC THEN REWRITE_TAC[] THEN
+  AP_TERM_TAC THEN
+  REWRITE_TAC[CONTAINS_DUPLICATE_EDGE; CONTAINS_DUPLICATE_EDGE_IDX] THEN
+  MATCH_MP_TAC CUE_CONG THEN
+  MAP_EVERY X_GEN_TAC [`i:num`; `j:num`] THEN STRIP_TAC THEN
+  REWRITE_TAC[] THEN CONV_TAC SYM_CONV THEN
+  MATCH_MP_TAC DUP_EDGE_IDX_EQ THEN ASM_REWRITE_TAC[] THEN
+  MP_TAC(ISPECL [`n:num`; `LENGTH (VERTICES f)`; `is:num list`]
+    ENUMERATOR_MEM) THEN
+  ASM_REWRITE_TAC[] THEN
+  DISCH_THEN(X_CHOOSE_THEN `js:num list`
+    (CONJUNCTS_THEN2 SUBST_ALL_TAC STRIP_ASSUME_TAC)) THEN
+  UNDISCH_TAC `ALL (\x. x <= LENGTH (VERTICES f) - 2) js` THEN
+  REWRITE_TAC[GSYM ALL_MEM] THEN DISCH_TAC THEN
+  UNDISCH_TAC `MEM j (CONS 0 (APPEND js [LENGTH (VERTICES f) - 1]))` THEN
+  REWRITE_TAC[MEM; MEM_APPEND] THEN STRIP_TAC THENL
+   [ASM_ARITH_TAC;
+    FIRST_X_ASSUM(MP_TAC o SPEC `j:num`) THEN ASM_REWRITE_TAC[] THEN
+    ASM_ARITH_TAC;
+    ASM_ARITH_TAC]);;
+end;;

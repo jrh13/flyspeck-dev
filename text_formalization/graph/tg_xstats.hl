@@ -1,0 +1,147 @@
+(* ========================================================================= *)
+(* tame/tame_xstats.ml -- one pass over the faces at a vertex for the five   *)
+(* numbers behind XEXCESS (TRI, QUAD, EXCEPT, NF_AT and SF_SUM each scan     *)
+(* FACES_AT g v separately; XSTATS computes them together).                  *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_exec.hl";;
+flyspeck_needs "graph/tg_xcheck.hl";;
+
+module Tg_xstats = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+open Tg_arcs;;
+open Tg_split_inv;;
+open Tg_enum_props;;
+open Tg_subdiv_inv;;
+open Tg_xlbthm;;
+open Tg_xdriver_lemmas;;
+open Tg_enum_fast;;
+open Tg_enum_fast2;;
+
+let XSTATS_ADD = new_definition
+ `XSTATS_ADD f l =
+    [EL 0 l + (if FINAL_FACE f /\ LENGTH (VERTICES f) = 3 then 1 else 0);
+     EL 1 l + (if FINAL_FACE f /\ LENGTH (VERTICES f) = 4 then 1 else 0);
+     EL 2 l + (if FINAL_FACE f /\ 5 <= LENGTH (VERTICES f) then 1 else 0);
+     EL 3 l + (if FINAL_FACE f then 0 else 1);
+     EL 4 l + (if FINAL_FACE f then SQUANDER_FACE (LENGTH (VERTICES f))
+               else 0)]`;;
+
+let XSTATS = define
+ `XSTATS [] = [0;0;0;0;0] /\
+  XSTATS (CONS (f:face) fs) = XSTATS_ADD f (XSTATS fs)`;;
+
+let XEXCESS_OF = new_definition
+ `XEXCESS_OF l =
+    let c = COMPLETION_VALUE (EL 0 l) (EL 1 l) (EL 2 l) (EL 3 l) (EL 4 l) in
+    if SQUANDER_TARGET <= c then SQUANDER_TARGET else c - EL 4 l`;;
+
+(* ------------------------------------------------------------------------- *)
+(* Helpers: the five projections of a 5-element list, and the CONS step of   *)
+(* a filtered count / filtered sum in the "old + increment" orientation of   *)
+(* XSTATS_ADD.                                                               *)
+(* ------------------------------------------------------------------------- *)
+
+let EL_LIST5 = prove
+ (`!a b c d e:num. EL 0 [a;b;c;d;e] = a /\ EL 1 [a;b;c;d;e] = b /\
+                   EL 2 [a;b;c;d;e] = c /\ EL 3 [a;b;c;d;e] = d /\
+                   EL 4 [a;b;c;d;e] = e`,
+  REWRITE_TAC[num_CONV `4`; num_CONV `3`; num_CONV `2`; num_CONV `1`;
+              EL; HD; TL]);;
+
+let LENGTH_FILTER_CONS_ADD = prove
+ (`!p (h:A) t. LENGTH (FILTER p (CONS h t)) =
+               LENGTH (FILTER p t) + (if p h then 1 else 0)`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[FILTER] THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[LENGTH] THEN ARITH_TAC);;
+
+let LIST_SUM_FILTER_CONS_ADD = prove
+ (`!f p (h:A) t. LIST_SUM f (FILTER p (CONS h t)) =
+                 LIST_SUM f (FILTER p t) + (if p h then f h else 0)`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[FILTER] THEN COND_CASES_TAC THEN
+  ASM_REWRITE_TAC[LIST_SUM] THEN ARITH_TAC);;
+
+(* ------------------------------------------------------------------------- *)
+(* The list-level specification (any face list), then the two theorems.      *)
+(* ------------------------------------------------------------------------- *)
+
+let XSTATS_LIST = prove
+ (`!l:face list.
+     XSTATS l =
+       [LENGTH (FILTER (\f. FINAL_FACE f /\ LENGTH (VERTICES f) = 3) l);
+        LENGTH (FILTER (\f. FINAL_FACE f /\ LENGTH (VERTICES f) = 4) l);
+        LENGTH (FILTER (\f. FINAL_FACE f /\ 5 <= LENGTH (VERTICES f)) l);
+        LENGTH (FILTER (\f. ~FINAL_FACE f) l);
+        LIST_SUM (\f. SQUANDER_FACE (LENGTH (VERTICES f)))
+                 (FILTER FINAL_FACE l)]`,
+  LIST_INDUCT_TAC THENL
+   [REWRITE_TAC[XSTATS; FILTER; LENGTH; LIST_SUM];
+    ASM_REWRITE_TAC[XSTATS; XSTATS_ADD; EL_LIST5; LENGTH_FILTER_CONS_ADD;
+                    LIST_SUM_FILTER_CONS_ADD] THEN
+    ASM_CASES_TAC `FINAL_FACE h` THEN ASM_REWRITE_TAC[]]);;
+
+let XSTATS_SPEC = prove
+ (`!g v. XSTATS (FACES_AT g v) =
+         [TRI g v; QUAD g v; EXCEPT g v; NF_AT g v; SF_SUM g v]`,
+  REWRITE_TAC[XSTATS_LIST; TRI; QUAD; EXCEPT; NF_AT; SF_SUM]);;
+
+let XEXCESS_XSTATS = prove
+ (`!g v. XEXCESS g v = XEXCESS_OF (XSTATS (FACES_AT g v))`,
+  REWRITE_TAC[XEXCESS; XEXCESS_OF; XSTATS_SPEC; EL_LIST5]);;
+
+(* ------------------------------------------------------------------------- *)
+(* Evaluation form of the step: the face size is tested by the shape of the  *)
+(* vertex list (IS_LEN3, IS_LEN4, IS_LEN_GE5 of tame_exec.ml), the quad      *)
+(* squander 2058 = SQUANDER_FACE 4 is a literal, and LENGTH (VERTICES f) is  *)
+(* computed only once, for the squander of a face with 5 or more vertices    *)
+(* (or, degenerately, fewer than 3: SQUANDER_FACE then gives the target).    *)
+(* ------------------------------------------------------------------------- *)
+
+let XSTATS_ADD_EXEC = prove
+ (`!f l. XSTATS_ADD f l =
+         if FINAL_FACE f then
+           if IS_LEN3 (VERTICES f) then
+             [EL 0 l + 1; EL 1 l; EL 2 l; EL 3 l; EL 4 l]
+           else if IS_LEN4 (VERTICES f) then
+             [EL 0 l; EL 1 l + 1; EL 2 l; EL 3 l; EL 4 l + 2058]
+           else
+             [EL 0 l; EL 1 l;
+              EL 2 l + (if IS_LEN_GE5 (VERTICES f) then 1 else 0);
+              EL 3 l; EL 4 l + SQUANDER_FACE (LENGTH (VERTICES f))]
+         else [EL 0 l; EL 1 l; EL 2 l; EL 3 l + 1; EL 4 l]`,
+  REPEAT GEN_TAC THEN
+  REWRITE_TAC[XSTATS_ADD; IS_LEN3_LENGTH; IS_LEN4_LENGTH;
+              IS_LEN_GE5_LENGTH] THEN
+  ASM_CASES_TAC `FINAL_FACE f` THEN ASM_REWRITE_TAC[ADD_CLAUSES] THEN
+  ASM_CASES_TAC `LENGTH (VERTICES f) = 3` THEN
+  ASM_REWRITE_TAC[SQUANDER_FACE; ADD_CLAUSES; ARITH] THEN
+  ASM_CASES_TAC `LENGTH (VERTICES f) = 4` THEN
+  ASM_REWRITE_TAC[SQUANDER_FACE; ADD_CLAUSES; ARITH]);;
+end;;

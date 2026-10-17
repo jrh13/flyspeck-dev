@@ -1,0 +1,100 @@
+(* ========================================================================= *)
+(* tame/tame_xdriver_lemmas.ml -- the interface lemmas the driver uses to    *)
+(* carry GRAPH_INV through the search tree: the node facts about the chosen  *)
+(* face and vertex, GRAPH_INV of every vertex-list successor of a node (in   *)
+(* ALL form over POLY_VLISTS), and the facts about the seed.  Derived from   *)
+(* tame_subdiv_inv.ml and tame_enum_props.ml.                                *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_subdiv_inv.hl";;
+flyspeck_needs "graph/tg_xlbthm.hl";;
+
+module Tg_xdriver_lemmas = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+open Tg_arcs;;
+open Tg_split_inv;;
+open Tg_enum_props;;
+open Tg_subdiv_inv;;
+open Tg_xlbthm;;
+
+let NODE_INV_FACTS = prove
+ (`!g fs f v. GRAPH_INV g /\ NON_FINALS g = fs /\ ~NULL fs /\
+              MINIMAL_FACE fs = f /\ MINIMAL_VERTEX g f = v
+              ==> MEM f (FACES g) /\ ~FINAL_FACE f /\ MEM v (VERTICES f)`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN
+  SUBGOAL_THEN `MEM (f:face) fs` ASSUME_TAC THENL
+   [UNDISCH_TAC `MINIMAL_FACE fs = f` THEN DISCH_THEN(SUBST1_TAC o SYM) THEN
+    REWRITE_TAC[MINIMAL_FACE] THEN MATCH_MP_TAC MEM_MINIMAL_EL THEN
+    UNDISCH_TAC `~NULL (fs:face list)` THEN REWRITE_TAC[NULL_EQ_NIL];
+    ALL_TAC] THEN
+  SUBGOAL_THEN `MEM (f:face) (FACES g) /\ ~FINAL_FACE f` STRIP_ASSUME_TAC THENL
+   [UNDISCH_TAC `MEM (f:face) fs` THEN
+    UNDISCH_TAC `NON_FINALS g = fs` THEN DISCH_THEN(SUBST1_TAC o SYM) THEN
+    REWRITE_TAC[MEM_NON_FINALS];
+    ALL_TAC] THEN
+  ASM_REWRITE_TAC[] THEN
+  SUBGOAL_THEN `~(VERTICES f = [])` ASSUME_TAC THENL
+   [UNDISCH_TAC `GRAPH_INV g` THEN REWRITE_TAC[GRAPH_INV; WF_GRAPH] THEN
+    DISCH_THEN(MP_TAC o CONJUNCT2 o CONJUNCT1) THEN
+    REWRITE_TAC[GSYM ALL_MEM] THEN
+    DISCH_THEN(MP_TAC o SPEC `f:face`) THEN
+    ASM_REWRITE_TAC[NULL_EQ_NIL] THEN MESON_TAC[];
+    ALL_TAC] THEN
+  UNDISCH_TAC `MINIMAL_VERTEX g f = v` THEN DISCH_THEN(SUBST1_TAC o SYM) THEN
+  REWRITE_TAC[MINIMAL_VERTEX] THEN MATCH_MP_TAC MEM_MINIMAL_EL THEN
+  ASM_REWRITE_TAC[]);;
+
+let POLY_VLISTS_INV = prove
+ (`!g f v i. GRAPH_INV g /\ MEM f (FACES g) /\ ~FINAL_FACE f /\
+             MEM v (VERTICES f) /\ 3 <= i
+             ==> ALL (\vl. GRAPH_INV (SUBDIV_FACE g f vl))
+                     (POLY_VLISTS i v f g)`,
+  REPEAT GEN_TAC THEN STRIP_TAC THEN REWRITE_TAC[GSYM ALL_MEM] THEN
+  X_GEN_TAC `vl:(num option)list` THEN DISCH_TAC THEN
+  SUBGOAL_THEN `DISTINCT (VERTICES f) /\ 3 <= LENGTH (VERTICES f)`
+  STRIP_ASSUME_TAC THENL
+   [UNDISCH_TAC `GRAPH_INV g` THEN REWRITE_TAC[GRAPH_INV; FACES_SIMPLE] THEN
+    DISCH_THEN(MP_TAC o CONJUNCT1 o CONJUNCT2 o CONJUNCT2) THEN
+    REWRITE_TAC[GSYM ALL_MEM] THEN
+    DISCH_THEN(MP_TAC o SPEC `f:face`) THEN ASM_REWRITE_TAC[];
+    ALL_TAC] THEN
+  MP_TAC(SPECL [`g:graph`; `f:face`; `v:num`; `i:num`; `vl:(num option)list`]
+               POLY_VLISTS_CHOSEN_OK) THEN
+  MP_TAC(SPECL [`g:graph`; `f:face`; `v:num`; `i:num`; `vl:(num option)list`]
+               POLY_VLISTS_HD) THEN
+  ASM_REWRITE_TAC[] THEN STRIP_TAC THEN DISCH_TAC THEN
+  MATCH_MP_TAC(SPECL [`g:graph`; `f:face`; `v:num`; `vl:(num option)list`]
+                     SUBDIV_FACE_INV) THEN
+  ASM_REWRITE_TAC[]);;
+
+let GRAPH_INV_FACE_LIST_LEN = prove
+ (`!g. GRAPH_INV g ==> FACE_LIST_LEN g`,
+  REWRITE_TAC[GRAPH_INV; WF_GRAPH] THEN MESON_TAC[]);;
+end;;

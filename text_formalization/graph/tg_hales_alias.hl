@@ -1,0 +1,120 @@
+(* ========================================================================= *)
+(* graph/tg_hales_alias.hl -- GENERATED (gen/gen_hales_alias.py).  The      *)
+(* bridge files tg_bridge_*.hl refer to Flyspeck's tame definitions by      *)
+(* names h_<name>; inside the Flyspeck build these are OCaml aliases of the  *)
+(* definitions (modules Seq, Hypermap, Tame_defs, Tame_defs2,               *)
+(* Import_tame_classification).  The archive/import aliases, which need      *)
+(* general/the_kepler_conjecture.hl, are in tg_archive_bridge.hl.  Outside   *)
+(* Flyspeck a verbatim replica (graph_native/hales_defs.hl) binds the names. *)
+(* ========================================================================= *)
+
+module Tg_hales_alias = struct
+
+let h_cat = Seq.cat;;
+let h_foldr = Seq.foldr;;
+let h_flatten = Seq.flatten;;
+let h_sumn = Seq.sumn;;
+let h_map = Seq.map;;
+let h_POWER = Hypermap.POWER;;
+let h_the = Tame_defs.the;;
+let h_minimal_el = Tame_defs.minimal_el;;
+let h_min_num = Tame_defs.min_num;;
+let h_min_list = Tame_defs.min_list;;
+let h_replace = Tame_defs.replace;;
+let h_rotate1 = Tame_defs.rotate1;;
+let h_rotate = Tame_defs.rotate;;
+let h_split_at_rec = Tame_defs.split_at_rec;;
+let h_split_at = Tame_defs.split_at;;
+let h_betwn = Tame_defs.betwn;;
+let h_cong = Tame_defs.cong;;
+let h_inj_on = Tame_defs.inj_on;;
+let h_rotate_to = Tame_defs.rotate_to;;
+let h_rotate_min = Tame_defs.rotate_min;;
+let h_nextElem = Tame_defs.nextElem;;
+let h_nextVertex = Tame_defs.nextVertex;;
+let h_nextVertices = Tame_defs.nextVertices;;
+let h_faces = Tame_defs.faces;;
+let h_vertices_set = Tame_defs.vertices_set;;
+let h_Face = Tame_defs.FACE;;
+let h_Faces = Tame_defs.FACES;;
+let h_Graph = Tame_defs.GRAPH;;
+let h_setFinal = Tame_defs.setFinal;;
+let h_countVertices = Tame_defs.countVertices_def;;
+let h_iota = Tame_defs.iota;;
+let h_upt = Tame_defs.upt;;
+let h_vertices_graph = Tame_defs.vertices_graph;;
+let h_vertices_set2 = Tame_defs.vertices_set2;;
+let h_faceListAt = Tame_defs.faceListAt;;
+let h_facesAt = Tame_defs.facesAt;;
+let h_heights = Tame_defs.heights;;
+let h_graphl = Tame_defs.graphl;;
+let h_finals = Tame_defs.finals;;
+let h_nonFinals = Tame_defs.nonFinals;;
+let h_countNonFinals = Tame_defs.countNonFinals;;
+let h_finalGraph = Tame_defs.finalGraph;;
+let h_makeFaceFinalFaceList = Tame_defs.makeFaceFinalFaceList;;
+let h_makeFaceFinal = Tame_defs.makeFaceFinal;;
+let h_fgraph = Tame_defs.fgraph;;
+let h_neighbors = Tame_defs.neighbors;;
+let h_directedLength = Tame_defs.directedLength;;
+let h_maxGon = Tame_defs.maxGon;;
+let h_Seed = Tame_defs.SEED;;
+let h_RTranCl = Tame_defs.RTranCl;;
+let h_C_EL = Tame_defs2.C_EL;;
+let h_not_equal = Tame_defs2.not_equal;;
+let h_list_update = Tame_defs2.list_update;;
+let h_mapAt = Tame_defs2.mapAt;;
+let h_enumBase = Tame_defs2.enumBase;;
+let h_enumAppend = Tame_defs2.enumAppend;;
+let h_enumerator = Tame_defs2.enumerator;;
+let h_hideDupsRec = Tame_defs2.hideDupsRec;;
+let h_hideDups = Tame_defs2.hideDups;;
+let h_indexToVertexList = Tame_defs2.indexToVertexList;;
+let h_height = Tame_defs2.height;;
+let h_heightsNewVertices = Tame_defs2.heightsNewVertices;;
+let h_minimalFace = Tame_defs2.minimalFace;;
+let h_minimalVertex = Tame_defs2.minimalVertex;;
+let h_split_face = Tame_defs2.split_face;;
+let h_replacefacesAt = Tame_defs2.replacefacesAt;;
+let h_duplicateEdge = Tame_defs2.duplicateEdge;;
+let h_containsUnacceptableEdgeSnd = Tame_defs2.containsUnacceptableEdgeSnd;;
+let h_containsUnacceptableEdge = Tame_defs2.containsUnacceptableEdge;;
+let h_containsDuplicateEdge = Tame_defs2.containsDuplicateEdge;;
+let h_splitFace = Tame_defs2.splitFace;;
+let h_subdivFace0 = Tame_defs2.subdivFace0;;
+let h_subdivFace = Tame_defs2.subdivFace;;
+let h_generatePolygon = Tame_defs2.generatePolygon;;
+let h_next_plane = Tame_defs2.next_plane;;
+let h_planeGraphsP = Tame_defs2.PlaneGraphsP;;
+let h_PlaneGraphs = Tame_defs2.PlaneGraphs;;
+let h_degree = Import_tame_classification.degree;;
+let h_tri = Import_tame_classification.tri;;
+let h_quad = Import_tame_classification.quad;;
+let h_except = Import_tame_classification.except;;
+let h_vertextype = Import_tame_classification.vertextype;;
+let h_exceptionalVertex = Import_tame_classification.exceptionalVertex;;
+let h_squanderTarget = Import_tame_classification.squanderTarget;;
+let h_excessTCount = Import_tame_classification.excessTCount;;
+let h_squanderVertex = Import_tame_classification.squanderVertex;;
+let h_squanderFace = Import_tame_classification.squanderFace;;
+let h_admissible1 = Import_tame_classification.admissible1;;
+let h_admissible2 = Import_tame_classification.admissible2;;
+let h_triangle = Import_tame_classification.triangle;;
+let h_admissible3 = Import_tame_classification.admissible3;;
+let h_tame9a = Import_tame_classification.tame9a;;
+let h_tame10 = Import_tame_classification.tame10;;
+let h_tame11a = Import_tame_classification.tame11a;;
+let h_tame11b = Import_tame_classification.tame11b;;
+let h_tame12o = Import_tame_classification.tame12o;;
+let h_tame13a = Import_tame_classification.tame13a;;
+let h_tame = Import_tame_classification.tame;;
+let h_EQ_CLASS = Import_tame_classification.EQ_CLASS;;
+let h_IMAGE_INFIX = Import_tame_classification.IMAGE_INFIX;;
+let h_is_pr_Hom = Import_tame_classification.is_pr_Hom;;
+let h_is_pr_Iso = Import_tame_classification.is_pr_Iso;;
+let h_is_Iso = Import_tame_classification.is_Iso;;
+let h_is_iso = Import_tame_classification.is_iso;;
+let h_iso_fgraph = Import_tame_classification.iso_fgraph;;
+let h_admissible' = Import_tame_classification.admissible';;
+
+end;;

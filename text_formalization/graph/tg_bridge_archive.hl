@@ -1,0 +1,72 @@
+(* ========================================================================= *)
+(* tame/tame_bridge_archive.ml -- our ARCHIVE is Flyspeck's                  *)
+(* tame_archive_lists: the chunked constant is converted to the evaluator's  *)
+(* numerals (the same base-200 Arith_num digits, no NUMERAL wrapper, that    *)
+(* Flyspeck's good_list_archive.hl uses), flattened by rewriting with the    *)
+(* FLAT and APPEND clauses and compared syntactically with the replica of    *)
+(* Flyspeck's constant (hales_archive.ml).                                   *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_eval_support.hl";;
+flyspeck_needs "graph/tg_archive.hl";;
+flyspeck_needs "graph/tg_archive_bridge.hl";;
+
+module Tg_bridge_archive = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+open Tg_bridge_main;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+open Tg_arcs;;
+open Tg_split_inv;;
+open Tg_enum_props;;
+open Tg_subdiv_inv;;
+open Tg_xlbthm;;
+open Tg_xdriver_lemmas;;
+open Tg_enum_fast;;
+open Tg_enum_fast2;;
+open Tg_xstats;;
+open Tg_leaf;;
+open Tg_leaf_exec;;
+open Tg_eval_support;;
+open Tg_eval_db;;
+open Tg_eval_compiled;;
+open Tg_driver;;
+
+let ARCHIVE_EQ_TAME_ARCHIVE_LISTS =
+  let ach = REPLACE_NUMERALS ARCHIVE_CHUNKS in
+  let lit = rand (concl ach) in
+  let flat_tm = `FLAT:((((num)list)list)list)list->(((num)list)list)list` in
+  let th_flat = PURE_REWRITE_CONV[FLAT; APPEND] (mk_comb (flat_tm, lit)) in
+  let th1 = TRANS (TRANS ARCHIVE (AP_TERM flat_tm ach)) th_flat in
+  let th2 = h_tame_archive_lists in
+  if aconv (rand (concl th1)) (rand (concl th2)) then TRANS th1 (SYM th2)
+  else failwith "ARCHIVE_EQ_TAME_ARCHIVE_LISTS: the archives differ";;
+
+let H_ARCHIVE = prove
+ (`!y. y IN archive <=> MEM y ARCHIVE`,
+  REWRITE_TAC[h_archive; IN_SET_OF_LIST; ARCHIVE_EQ_TAME_ARCHIVE_LISTS]);;
+end;;

@@ -1,0 +1,61 @@
+(* ========================================================================= *)
+(* tame/tame_bridge_main.ml -- Flyspeck's hypothesis import_tame_            *)
+(* classification (hales_archive.ml) follows from the four class runs        *)
+(* (CLASSIFICATION_FROM_FOUR_RUNS, tame_main.ml) through the bridge          *)
+(* theorems, given that Flyspeck's archive is our ARCHIVE (the equality of   *)
+(* the two archive constants is computed in tame_bridge_archive.ml).         *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_main.hl";;
+flyspeck_needs "graph/tg_bridge_tame.hl";;
+flyspeck_needs "graph/tg_archive_bridge.hl";;
+
+module Tg_bridge_main = struct
+
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_main;;
+open Tg_hales_alias;;
+open Tg_archive_bridge;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_bridge_defs;;
+open Tg_bridge_list;;
+open Tg_bridge_graph;;
+open Tg_bridge_tame;;
+
+let WF_GRAPH_PLANE_GRAPHS = prove
+ (`!g. g IN PLANE_GRAPHS ==> WF_GRAPH g`,
+  REWRITE_TAC[IN_PLANE_GRAPHS; GSYM REACH] THEN MESON_TAC[WF_GRAPH_REACH]);;
+
+let IMPORT_TAME_CLASSIFICATION_FROM_RUNS = prove
+ (`(!y. y IN archive <=> MEM y ARCHIVE) /\
+   TFO ARCHIVE 0 (SEED 0) /\ TFO ARCHIVE 1 (SEED 1) /\
+   TFO ARCHIVE 2 (SEED 2) /\ TFO ARCHIVE 3 (SEED 3)
+   ==> import_tame_classification`,
+  REWRITE_TAC[h_import_tame_classification] THEN STRIP_TAC THEN
+  X_GEN_TAC `hg:((num)list#bool)list#num#(((num)list#bool)list)list#(num)list`
+  THEN STRIP_TAC THEN
+  FIRST_X_ASSUM(MP_TAC o MATCH_MP H_PLANEGRAPHS) THEN
+  DISCH_THEN(X_CHOOSE_THEN `g:graph`
+    (CONJUNCTS_THEN2 SUBST_ALL_TAC ASSUME_TAC)) THEN
+  SUBGOAL_THEN `FACE_LIST_LEN g` ASSUME_TAC THENL
+   [ASM_MESON_TAC[WF_GRAPH_PLANE_GRAPHS; WF_GRAPH]; ALL_TAC] THEN
+  SUBGOAL_THEN `TAME g` ASSUME_TAC THENL
+   [ASM_MESON_TAC[H_TAME]; ALL_TAC] THEN
+  SUBGOAL_THEN `?y. MEM y ARCHIVE /\ ISO_FGRAPH (FGRAPH g) y` MP_TAC THENL
+   [ASM_MESON_TAC[CLASSIFICATION_FROM_FOUR_RUNS]; ALL_TAC] THEN
+  ASM_REWRITE_TAC[H_FGRAPH; H_ISO_FGRAPH]);;
+end;;

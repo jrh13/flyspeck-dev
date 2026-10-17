@@ -1,0 +1,24 @@
+(* ========================================================================= *)
+(* graph/tg_archive_data.hl -- the tame graph archive for the            *)
+(* classification files, from formal_graph/archive/archive_all.ml:        *)
+(* files, from Flyspeck's formal_graph/archive/archive_all.ml: chunks of 100 *)
+(* (id, face list) pairs in Flyspeck's order (the chunk structure of the     *)
+(* constant ARCHIVE_CHUNKS of tg_archive.hl).  Replaces the generated data   *)
+(* file tame_archive_data.ml of the standalone package.                      *)
+(* ========================================================================= *)
+
+needs "../formal_graph/archive/archive_all.ml";;
+
+module Tg_archive_data = struct
+
+let rec chunk n l =
+  if l = [] then [] else
+  let rec take k l acc =
+    if k = 0 || l = [] then (List.rev acc, l)
+    else take (k - 1) (List.tl l) (List.hd l :: acc) in
+  let (h, t) = take n l [] in h :: chunk n t;;
+
+let tame_archive_data () : (string * int list list) list list =
+  chunk 100 (List.map (fun (id, _, g) -> (id, g)) Archive_all.tame_list);;
+
+end;;
