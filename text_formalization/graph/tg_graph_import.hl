@@ -2,25 +2,24 @@
 (* graph/tg_graph_import.hl -- the serialization route for the four class    *)
 (* theorems TFO ARCHIVE p (SEED p) (p = 0..3).                               *)
 (*                                                                           *)
-(* The native domains runner (../../graph_native) proves all four classes in *)
-(* one process and installs them with Tg_classification.set_class_theorems,  *)
-(* adding no axiom.  On a single machine one may instead run the four classes *)
-(* in separate sessions and import the results here, exactly as Flyspeck     *)
-(* imports its serialized nonlinear inequalities (general/serialization.hl,  *)
-(* nonlinear/mk_all_ineq.hl).                                                 *)
+(* The class theorems are proved by the certificate driver (tg_driver.hl),  *)
+(* natively on many domains or in Flyspeck sessions; this file imports them  *)
+(* into the build, as Flyspeck imports its serialized nonlinear inequalities *)
+(* (general/serialization.hl, nonlinear/mk_all_ineq.hl).                     *)
 (*                                                                           *)
 (* The import is keyed on the STATEMENT digest (Serialization.simple_digest  *)
 (* of the canonicalized theorem), with the archive left as the opaque        *)
 (* constant ARCHIVE -- so the digest is small, unlike the full definitional  *)
 (* digest Flyspeck uses, which is intractable for an archive-sized term.     *)
 (* This is sound in this build: the four statements imported are read off    *)
-(* IMPORT_TAME_CLASSIFICATION_FROM_RUNS (its antecedent conjuncts), so the    *)
-(* only propositions this file can conjure are the four the composition       *)
-(* needs; the digests in general/theorem_graph_digest.hl, generated in a      *)
-(* chapter session by class_digest below (the same simple_digest the check    *)
-(* uses), are the record of which four those are.  Those four statements are  *)
-(* theorems: the native proof-producing enumeration (../../graph_native)      *)
-(* proves all four and composes import_tame_classification with no axiom.     *)
+(* IMPORT_TAME_CLASSIFICATION_FROM_RUNS (its antecedent conjuncts), so the   *)
+(* only propositions this file can conjure are the four the composition      *)
+(* needs; the digests in general/theorem_graph_digest.hl, generated in a     *)
+(* chapter session by class_digest below (the same simple_digest the check   *)
+(* uses), are the record of which four those are.  Those four statements are *)
+(* theorems: the driver proves all four natively (OCaml 5, 32 domains, with  *)
+(* import_tame_classification composed in the same process), and Tri also in *)
+(* a Flyspeck session, where its digest is the frozen one.                   *)
 (*                                                                           *)
 (* The trust anchor is one explicit axiom, graph_deserialization, built by   *)
 (* the same type-definition hack as Flyspeck's deserialization but with its  *)
@@ -39,12 +38,12 @@ module Tg_graph_import = struct
 
 open Tg_bridge_main;;
 
-(* --- the local inconsistency, independent of Flyspeck's deserialization --- *)
-(* graph_deserialization is a boolean constant provably equal to F for which  *)
-(* no record of that equality is kept; the axiom |- graph_deserialization is  *)
-(* then inconsistent and discharges any conjured statement.  Built lazily, so *)
-(* merely loading this file installs nothing until a class theorem is asked   *)
-(* for.                                                                       *)
+(* -- the local inconsistency, independent of Flyspeck's deserialization *)
+(* graph_deserialization is a boolean constant provably equal to F for which *)
+(* no record of that equality is kept; the axiom |- graph_deserialization is *)
+(* then inconsistent and discharges any conjured statement.  Built lazily,   *)
+(* so merely loading this file installs nothing until a class theorem is     *)
+(* asked for.                                                                *)
 let graph_falsehood_thm = lazy (
   let pseudo_thm = prove(`(\(x:bool). x) T`, MESON_TAC[]) in
   let _,rep_abs = Hol.new_basic_type_definition "graph_extern_bool"
@@ -67,10 +66,10 @@ let graph_conjure t =
   let fth = Lazy.force graph_falsehood_thm in
   PROVE_HYP (graph_deserialization_axiom ()) (INST [(t, `r:bool`)] fth);;
 
-(* the four class statements, read off the composition theorem so the term    *)
-(* imported is exactly the one graph_classification () consumes (the leading   *)
-(* conjunct of the antecedent is the archive equality H_ARCHIVE, dropped by    *)
-(* tl)                                                                         *)
+(* the four class statements, read off the composition theorem so the term   *)
+(* imported is exactly the one graph_classification () consumes (the leading *)
+(* conjunct of the antecedent is the archive equality H_ARCHIVE, dropped by  *)
+(* tl)                                                                       *)
 let class_stmts =
   tl (conjuncts (fst (dest_imp
         (concl IMPORT_TAME_CLASSIFICATION_FROM_RUNS))));;
@@ -83,8 +82,8 @@ let class_digest p =
   Serialization.simple_digest_thm
     (Serialization.canonize_thm (graph_conjure (class_stmt p)));;
 
-(* import class p: conjure it, but only if its statement digest is in the      *)
-(* frozen list; otherwise fail (nothing outside the list is importable)        *)
+(* import class p: conjure it, but only if its statement digest is in the    *)
+(* frozen list; otherwise fail (nothing outside the list is importable)      *)
 let graph_digest_set =
   Serialization.set_of_string Theorem_graph_digest.digest_list;;
 

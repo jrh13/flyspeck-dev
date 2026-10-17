@@ -1,15 +1,16 @@
 (* ========================================================================= *)
 (* graph/tg_classification.hl -- the final step: from the four class        *)
 (* theorems TFO ARCHIVE p (SEED p) (p = 0..3) and the archive equality,      *)
-(* Flyspeck's import_tame_classification.  The class theorems come from the  *)
-(* certificate-checked enumeration; their source is pluggable:               *)
-(*   - the native domains runner (../../graph_native) proves all four in one *)
-(*     process and installs them with set_class_theorems;                    *)
-(*   - the serialization route imports them from the digests in              *)
-(*     general/theorem_graph_digest.hl (as nonlinear/mk_all_ineq.hl does).   *)
+(* Flyspeck's import_tame_classification.  The class theorems are proved by  *)
+(* the certificate driver (graph/tg_driver.hl); their source here is         *)
+(* pluggable, set with set_class_theorems:                                   *)
+(*   - graph/tg_graph_import.hl imports them by statement digest             *)
+(*     (general/theorem_graph_digest.hl), as nonlinear/mk_all_ineq.hl        *)
+(*     imports the nonlinear inequalities;                                   *)
+(*   - a class proved in the same session by Tg_driver.run_class can be      *)
+(*     installed directly.                                                   *)
 (* graph_classification () returns |- import_tame_classification once a      *)
-(* source is set; in a full build it then discharges the tame hypothesis of  *)
-(* The_kepler_conjecture.kepler_conjecture_with_assumptions_and_archive.     *)
+(* source is set.                                                            *)
 (* ========================================================================= *)
 
 flyspeck_needs "graph/tg_bridge_main.hl";;
@@ -25,8 +26,9 @@ open Tg_bridge_archive;;
 (* source of the class theorems; p ranges over 0..3 (Tri, Quad, Pent, Hex) *)
 let class_theorem : (int -> thm) ref =
   ref (fun _ -> failwith
-    ("Tg_classification: no class-theorem source; run graph_native " ^
-     "(domains) or import the graph digests (serialization)"));;
+    ("Tg_classification: no class-theorem source; load " ^
+     "graph/tg_graph_import.hl or install proved theorems with " ^
+     "set_class_theorems"));;
 
 let set_class_theorems f = class_theorem := f;;
 

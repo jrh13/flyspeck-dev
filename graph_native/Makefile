@@ -1,16 +1,14 @@
 # Build of the certificate generator for the graph/ chapter.
 #
-#   make                 the generator ./certgen
-#   make FIRST=0 LAST=0  (nothing; see below for running)
+#   ulimit -s unlimited; make      the generator ./certgen
 #
-# The generator is pure OCaml (no HOL Light); it needs only the unix and str
-# findlib packages.  It reads the archive from ../formal_graph/archive/
-# archive_all.ml.
+# The unlimited stack is needed both to compile (the archive data from
+# ../formal_graph/archive/archive_all.ml is compiled in) and to run.  The
+# generator is pure OCaml (no HOL Light); it needs only the unix and str
+# findlib packages.
 #
-# The HOL task runner that proves the four class theorems TFO ARCHIVE p
-# (SEED p) and emits their serialized digests is built from the chapter's
-# non-bridge modules against a HOL Light with HOLLIGHT_USE_MODULE=1, exactly
-# as azure/ builds native_verifier; see README.md.
+# The certificates are checked in HOL Light by the chapter's driver,
+# Tg_driver.run_class (Build.build_sequence_graph_prove); see README.md.
 
 ARCHIVE = ../formal_graph/archive/archive_all.ml
 GENSRC  = tame_ml_var.ml certgen_core.ml
