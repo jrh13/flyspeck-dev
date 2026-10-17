@@ -53,8 +53,34 @@ build (`native_build5/`, binary `tame_final16`) proves all four classes and
 `|- import_tame_classification` in 1 h 32 min; wiring its digest output into
 `general/theorem_graph_digest.hl` is the remaining executable step.
 
+## The digest format (important detail)
+
+Flyspeck's serialization import (`general/serialization.hl`,
+`mk_deserialize_thm`) looks a theorem up by its **`full_digest_thm`** -- a
+digest of the theorem's full definitional history, not just the statement
+(`simple_digest_thm`).  So the producer must emit `full_digest_thm` of each
+`|- TFO ARCHIVE p (SEED p)`, computed with Flyspeck's own serialization code
+(vendored, as `azure/flyspeck-nat/serialization.hl` is, together with the
+`prove_by_refinement.hl`/`definitions.hl` it builds on), and the value must
+be validated to equal the one the in-build importer computes for the same
+statement.  Because the chapter's `TFO`/`ARCHIVE`/`SEED` and their ancestors
+are defined identically to the package's (the archive constant comes from the
+same `archive_all.ml` data), the histories are expected to coincide, but this
+has to be checked once by comparing a producer digest (e.g. for Tri) against
+an in-build computation before trusting the list.
+
 ## Status
 
-- `certgen`: built, reads Flyspeck's archive, reproduces the certificates.
-- Runner + digest collection + `general/theorem_graph_digest.hl`: to run
-  (the runner itself is proven in the standalone project).
+- `certgen`: built, reads Flyspeck's archive, reproduces the certificates
+  (`./certgen 0` = the Tri certificate, 29,690 lines / 501 matches).
+- Producer: the standalone project proves all four `TFO ARCHIVE p (SEED p)`
+  and composes `|- import_tame_classification` in 1 h 32 min
+  (`native_build5/tame_final16`); `pkg_root/native_digest.ml` is that runner
+  with a digest printer (currently `simple_digest_thm`; switch to
+  `full_digest_thm` with the vendored serialization stack per above).
+- Remaining: vendor the serialization stack into the producer, validate the
+  Tri `full_digest` against an in-build value, run all four classes to emit
+  `general/theorem_graph_digest.hl`, and add the serialization import to
+  `graph/tg_classification.hl` (installing the deserialized theorems via
+  `set_class_theorems`).  The in-build bridge composition is already
+  verified (graph/tg_classification.hl).
