@@ -4,7 +4,7 @@
      certgen P top D FRONTIER         top part to stdout, frontier paths to FRONTIER
      certgen P sub OUTDIR FRONTIER START COUNT   subtrees to OUTDIR/sub_P_n.txt *)
 let () =
-  Certgen.set_archive tame_archive_data;
+  Certgen.set_archive graph_archive;
   let p = int_of_string Sys.argv.(1) in
   if Array.length Sys.argv = 2 then print_string (Certgen.subtree p [])
   else if Sys.argv.(2) = "top" then begin

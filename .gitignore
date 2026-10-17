@@ -41,3 +41,4 @@
 # Where read_lp_certificates unpacks a .tar.gz; create_tmp_dir refuses to
 # reuse it unless it is empty, so a failed read has to be cleaned up by hand
 /formal_lp/glpk/binary/tmp/
+graph_native/certgen

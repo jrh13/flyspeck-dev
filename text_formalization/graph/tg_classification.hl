@@ -1,0 +1,39 @@
+(* ========================================================================= *)
+(* graph/tg_classification.hl -- the final step: from the four class        *)
+(* theorems TFO ARCHIVE p (SEED p) (p = 0..3) and the archive equality,      *)
+(* Flyspeck's import_tame_classification.  The class theorems come from the  *)
+(* certificate-checked enumeration; their source is pluggable:               *)
+(*   - the native domains runner (../../graph_native) proves all four in one *)
+(*     process and installs them with set_class_theorems;                    *)
+(*   - the serialization route imports them from the digests in              *)
+(*     general/theorem_graph_digest.hl (as nonlinear/mk_all_ineq.hl does).   *)
+(* graph_classification () returns |- import_tame_classification once a      *)
+(* source is set; in a full build it then discharges the tame hypothesis of  *)
+(* The_kepler_conjecture.kepler_conjecture_with_assumptions_and_archive.     *)
+(* ========================================================================= *)
+
+flyspeck_needs "graph/tg_bridge_main.hl";;
+flyspeck_needs "graph/tg_bridge_archive.hl";;
+
+prioritize_num();;
+
+module Tg_classification = struct
+
+open Tg_bridge_main;;
+open Tg_bridge_archive;;
+
+(* source of the class theorems; p ranges over 0..3 (Tri, Quad, Pent, Hex) *)
+let class_theorem : (int -> thm) ref =
+  ref (fun _ -> failwith
+    ("Tg_classification: no class-theorem source; run graph_native " ^
+     "(domains) or import the graph digests (serialization)"));;
+
+let set_class_theorems f = class_theorem := f;;
+
+(* |- import_tame_classification, from the four class theorems and H_ARCHIVE *)
+let graph_classification () =
+  MP IMPORT_TAME_CLASSIFICATION_FROM_RUNS
+     (end_itlist CONJ
+        (H_ARCHIVE :: map (fun p -> !class_theorem p) [0; 1; 2; 3]));;
+
+end;;

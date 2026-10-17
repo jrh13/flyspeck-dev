@@ -412,9 +412,43 @@ let build_sequence_main_statement =
 let build_sequence_the_nonlinear_inequalities =
       build_sequence_main_statement @  ["nonlinear/mk_all_ineq.hl"];;
 
-let build_sequence_nonserial = 
+let build_sequence_nonserial =
   filter (fun t -> not (t =    "nonlinear/mk_all_ineq.hl"))
     build_sequence_full;;
+
+(* The graph/ chapter: the tame-graph classification proved in HOL Light
+   (replacing the appeal to the external Isabelle classification).  It is
+   loaded after general/the_kepler_conjecture.hl, whose `archive` and
+   `import_tame_classification` definitions it bridges to.  Not part of the
+   default build sequences; load with
+
+     map flyspeck_needs Build.build_sequence_graph;;
+
+   See text_formalization/graph/README.md.  tg_classification.hl needs the
+   four class theorems TFO ARCHIVE p (SEED p), supplied either by the native
+   domains runner (../graph_native) or imported from the serialized digests;
+   until a source is installed, graph_classification () reports that. *)
+
+let build_sequence_graph =
+  let (through_kepler, _) =
+    cut_at "nonlinear/mk_all_ineq.hl" [] build_sequence_full in
+  through_kepler @
+  [ "graph/tg_list.hl"; "graph/tg_graph.hl"; "graph/tg_enum.hl";
+    "graph/tg_tame.hl"; "graph/tg_iso.hl"; "graph/tg_exec.hl";
+    "graph/tg_check.hl"; "graph/tg_sound.hl"; "graph/tg_mono.hl";
+    "graph/tg_lbthm.hl"; "graph/tg_isothm.hl"; "graph/tg_newverts.hl";
+    "graph/tg_archive_data.hl"; "graph/tg_archive.hl"; "graph/tg_main.hl";
+    "graph/tg_hales_alias.hl"; "graph/tg_archive_bridge.hl"; "graph/tg_wf.hl";
+    "graph/tg_wf_inv.hl"; "graph/tg_bridge_defs.hl"; "graph/tg_bridge_list.hl";
+    "graph/tg_bridge_graph.hl"; "graph/tg_bridge_tame.hl";
+    "graph/tg_bridge_main.hl"; "graph/tg_inv.hl"; "graph/tg_xlb.hl";
+    "graph/tg_xcheck.hl"; "graph/tg_arcs.hl"; "graph/tg_split_inv.hl";
+    "graph/tg_enum_props.hl"; "graph/tg_subdiv_inv.hl"; "graph/tg_xlbthm.hl";
+    "graph/tg_xdriver_lemmas.hl"; "graph/tg_enum_fast.hl";
+    "graph/tg_enum_fast2.hl"; "graph/tg_xstats.hl"; "graph/tg_leaf.hl";
+    "graph/tg_leaf_exec.hl"; "graph/tg_eval_support.hl"; "graph/tg_eval_db.hl";
+    "graph/tg_eval_compiled.hl"; "graph/tg_driver.hl";
+    "graph/tg_bridge_archive.hl"; "graph/tg_classification.hl" ];;
 
 
 
