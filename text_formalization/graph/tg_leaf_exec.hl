@@ -39,7 +39,7 @@ open Tg_xstats;;
 open Tg_leaf;;
 let PIECES_AT_A = new_definition
  `PIECES_AT_A (arcs:(num#num#num#num)list) u =
-    LENGTH (FILTER (\arc. u = ARC_A arc \/ u = ARC_B arc) arcs)`;;
+    LENGTH (FILTER (\ac. u = ARC_A ac \/ u = ARC_B ac) arcs)`;;
 
 let XCOUNTS_AFTER_A = new_definition
  `XCOUNTS_AFTER_A g (vl:(num option)list) i n arcs u =
@@ -54,7 +54,7 @@ let XCOUNTS_AFTER_A = new_definition
 
 let LEAF_SEP_PIECES_A = new_definition
  `LEAF_SEP_PIECES_A f arcs u w <=>
-    ALL (\arc. ~(MEM u (ARC_VERTS f arc) /\ MEM w (ARC_VERTS f arc))) arcs`;;
+    ALL (\ac. ~(MEM u (ARC_VERTS f ac) /\ MEM w (ARC_VERTS f ac))) arcs`;;
 
 let LEAF_SEP_PAIR_A = new_definition
  `LEAF_SEP_PAIR_A g f vl arcs u w <=>

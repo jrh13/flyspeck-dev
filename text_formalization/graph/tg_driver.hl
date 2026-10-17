@@ -16,6 +16,7 @@
 (* Certificate parsing.                                                      *)
 (* ------------------------------------------------------------------------- *)
 
+flyspeck_needs "graph/tg_eval_compiled.hl";;
 flyspeck_needs "graph/tg_sound.hl";;
 flyspeck_needs "graph/tg_mono.hl";;
 flyspeck_needs "graph/tg_lbthm.hl";;
@@ -61,6 +62,7 @@ open Tg_leaf;;
 open Tg_leaf_exec;;
 open Tg_eval_support;;
 open Tg_eval_db;;
+open Tg_eval_compiled;;
 type disposition =
   | Child
   | Prune_vcount
@@ -588,8 +590,10 @@ and succ_thm p_tm arch g' d inv' ic =
 (* Entry point.                                                              *)
 (* ------------------------------------------------------------------------- *)
 
+(* Stdlib.open_in: in a Flyspeck session Multivariate binds open_in to a     *)
+(* theorem (topology.ml), which would shadow the channel function here.     *)
 let run_class p certfile =
-  let ic = open_in certfile in
+  let ic = Stdlib.open_in certfile in
   Atomic.set nodes_done 0; t_start := Unix.gettimeofday(); cur_p := p;
   let p_tm = anum p in
   let arch = archive_tm in

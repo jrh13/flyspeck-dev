@@ -76,32 +76,32 @@ let ARCS_REC = define
 let ARCS = new_definition
  `ARCS n (vl:(num option)list) = ARCS_REC (THE (HD vl)) 0 n (TL vl)`;;
 
-let ARC_A = new_definition `ARC_A (arc:num#num#num#num) = FST arc`;;
-let ARC_K = new_definition `ARC_K (arc:num#num#num#num) = FST (SND arc)`;;
+let ARC_A = new_definition `ARC_A (ac:num#num#num#num) = FST ac`;;
+let ARC_K = new_definition `ARC_K (ac:num#num#num#num) = FST (SND ac)`;;
 let ARC_B = new_definition
- `ARC_B (arc:num#num#num#num) = FST (SND (SND arc))`;;
+ `ARC_B (ac:num#num#num#num) = FST (SND (SND ac))`;;
 let ARC_BASE = new_definition
- `ARC_BASE (arc:num#num#num#num) = SND (SND (SND arc))`;;
+ `ARC_BASE (ac:num#num#num#num) = SND (SND (SND ac))`;;
 
 (* an arc with no new vertex between adjacent chosen vertices creates no   *)
 (* piece (the edge of f is used directly)                                   *)
 let TRIVIAL_ARC = new_definition
- `TRIVIAL_ARC f arc <=>
-    ARC_K arc = 0 /\ NEXT_VERTEX f (ARC_A arc) = ARC_B arc`;;
+ `TRIVIAL_ARC f ac <=>
+    ARC_K ac = 0 /\ NEXT_VERTEX f (ARC_A ac) = ARC_B ac`;;
 
 let PIECE_ARCS = new_definition
- `PIECE_ARCS f n vl = FILTER (\arc. ~TRIVIAL_ARC f arc) (ARCS n vl)`;;
+ `PIECE_ARCS f n vl = FILTER (\ac. ~TRIVIAL_ARC f ac) (ARCS n vl)`;;
 
 (* the vertices of the piece of a non-trivial arc *)
 let ARC_VERTS = new_definition
- `ARC_VERTS f arc =
-    APPEND (CONS (ARC_A arc) (BETWEEN (VERTICES f) (ARC_A arc) (ARC_B arc)))
-           (APPEND [ARC_B arc]
-                   (UPT (ARC_BASE arc) (ARC_BASE arc + ARC_K arc)))`;;
+ `ARC_VERTS f ac =
+    APPEND (CONS (ARC_A ac) (BETWEEN (VERTICES f) (ARC_A ac) (ARC_B ac)))
+           (APPEND [ARC_B ac]
+                   (UPT (ARC_BASE ac) (ARC_BASE ac + ARC_K ac)))`;;
 
 let PIECES_AT = new_definition
  `PIECES_AT f n vl u =
-    LENGTH (FILTER (\arc. u = ARC_A arc \/ u = ARC_B arc)
+    LENGTH (FILTER (\ac. u = ARC_A ac \/ u = ARC_B ac)
                    (PIECE_ARCS f n vl))`;;
 
 let NEW_COUNT = new_definition
@@ -136,7 +136,7 @@ let LEAF_SEP_OLD = new_definition
 
 let LEAF_SEP_PIECES = new_definition
  `LEAF_SEP_PIECES f n vl u w <=>
-    ALL (\arc. ~(MEM u (ARC_VERTS f arc) /\ MEM w (ARC_VERTS f arc)))
+    ALL (\ac. ~(MEM u (ARC_VERTS f ac) /\ MEM w (ARC_VERTS f ac)))
         (PIECE_ARCS f n vl)`;;
 
 let LEAF_SEP_POLY = new_definition
@@ -311,29 +311,29 @@ let ARC_PROJ = prove
   REWRITE_TAC[ARC_A; ARC_K; ARC_B; ARC_BASE]);;
 
 let MEM_ARC_VERTS = prove
- (`!f arc x. MEM x (ARC_VERTS f arc) <=>
-             x = ARC_A arc \/
-             MEM x (BETWEEN (VERTICES f) (ARC_A arc) (ARC_B arc)) \/
-             x = ARC_B arc \/
-             ARC_BASE arc <= x /\ x < ARC_BASE arc + ARC_K arc`,
+ (`!f ac x. MEM x (ARC_VERTS f ac) <=>
+             x = ARC_A ac \/
+             MEM x (BETWEEN (VERTICES f) (ARC_A ac) (ARC_B ac)) \/
+             x = ARC_B ac \/
+             ARC_BASE ac <= x /\ x < ARC_BASE ac + ARC_K ac`,
   REWRITE_TAC[ARC_VERTS; MEM_APPEND; MEM; MEM_UPT] THEN MESON_TAC[]);;
 
 let ARC_COUNT = new_definition
  `ARC_COUNT f x arcs =
-    LENGTH (FILTER (\arc. MEM x (ARC_VERTS f arc))
-                   (FILTER (\arc. ~TRIVIAL_ARC f arc) arcs))`;;
+    LENGTH (FILTER (\ac. MEM x (ARC_VERTS f ac))
+                   (FILTER (\ac. ~TRIVIAL_ARC f ac) arcs))`;;
 
 let ARC_COUNT_CLAUSES = prove
  (`(!f x. ARC_COUNT f x [] = 0) /\
-   (!f x arc arcs.
-      ARC_COUNT f x (CONS arc arcs) =
+   (!f x ac arcs.
+      ARC_COUNT f x (CONS ac arcs) =
       ARC_COUNT f x arcs +
-      (if ~TRIVIAL_ARC f arc /\ MEM x (ARC_VERTS f arc) then 1 else 0))`,
+      (if ~TRIVIAL_ARC f ac /\ MEM x (ARC_VERTS f ac) then 1 else 0))`,
   REWRITE_TAC[ARC_COUNT; FILTER_FILTER] THEN CONJ_TAC THENL
    [REWRITE_TAC[FILTER; LENGTH]; REWRITE_TAC[LENGTH_FILTER_CONS_ADD]]);;
 
 let ARC_COUNT_ZERO = prove
- (`!f0 x arcs. (!arc. MEM arc arcs ==> ~MEM x (ARC_VERTS f0 arc))
+ (`!f0 x arcs. (!ac. MEM ac arcs ==> ~MEM x (ARC_VERTS f0 ac))
                ==> ARC_COUNT f0 x arcs = 0`,
   GEN_TAC THEN GEN_TAC THEN LIST_INDUCT_TAC THEN
   REWRITE_TAC[ARC_COUNT_CLAUSES; MEM] THEN DISCH_TAC THEN
@@ -344,9 +344,9 @@ let ARC_COUNT_ZERO = prove
   ASM_MESON_TAC[]);;
 
 let ARCS_REC_ENDPOINTS = prove
- (`!vos a k base arc.
-     MEM arc (ARCS_REC a k base vos)
-     ==> MEM (ARC_A arc) (CONS a (SOMES vos)) /\ MEM (ARC_B arc) (SOMES vos)`,
+ (`!vos a k base ac.
+     MEM ac (ARCS_REC a k base vos)
+     ==> MEM (ARC_A ac) (CONS a (SOMES vos)) /\ MEM (ARC_B ac) (SOMES vos)`,
   LIST_INDUCT_TAC THENL [REWRITE_TAC[ARCS_REC; MEM]; ALL_TAC] THEN
   REPEAT GEN_TAC THEN
   STRUCT_CASES_TAC(ISPEC `h:num option` (cases "option")) THENL
@@ -355,7 +355,7 @@ let ARCS_REC_ENDPOINTS = prove
   DISCH_THEN(DISJ_CASES_THEN2 SUBST1_TAC MP_TAC) THENL
    [REWRITE_TAC[ARC_PROJ];
     FIRST_X_ASSUM(MP_TAC o SPECL [`a':num`; `0`; `base + k`;
-                                  `arc:num#num#num#num`]) THEN
+                                  `ac:num#num#num#num`]) THEN
     REWRITE_TAC[MEM] THEN MESON_TAC[]]);;
 
 let SUBDIV_OPTS_SOMES_MEM = prove
@@ -446,16 +446,16 @@ let ARCS_REC_ARC_PROPS = prove
      (?P0 S0. VERTICES f0 = APPEND P0 (CONS u S0) /\
               APPEND S0 P0 = APPEND R DP) /\
      SUBDIV_OPTS vos R /\ (!x. MEM x (VERTICES f0) ==> x < base)
-     ==> !arc. MEM arc (ARCS_REC u k base vos)
-               ==> MEM (ARC_A arc) (CONS u R) /\ MEM (ARC_B arc) R /\
-                   ~(ARC_A arc = ARC_B arc) /\
-                   (!x. MEM x (BETWEEN (VERTICES f0) (ARC_A arc) (ARC_B arc))
+     ==> !ac. MEM ac (ARCS_REC u k base vos)
+               ==> MEM (ARC_A ac) (CONS u R) /\ MEM (ARC_B ac) R /\
+                   ~(ARC_A ac = ARC_B ac) /\
+                   (!x. MEM x (BETWEEN (VERTICES f0) (ARC_A ac) (ARC_B ac))
                         ==> MEM x R /\ ~MEM x (CONS u (SOMES vos))) /\
-                   base <= ARC_BASE arc /\
-                   ARC_BASE arc + ARC_K arc <= base + NEW_VERTS k vos /\
-                   (TRIVIAL_ARC f0 arc <=>
-                    ARC_K arc = 0 /\
-                    BETWEEN (VERTICES f0) (ARC_A arc) (ARC_B arc) = [])`,
+                   base <= ARC_BASE ac /\
+                   ARC_BASE ac + ARC_K ac <= base + NEW_VERTS k vos /\
+                   (TRIVIAL_ARC f0 ac <=>
+                    ARC_K ac = 0 /\
+                    BETWEEN (VERTICES f0) (ARC_A ac) (ARC_B ac) = [])`,
   LIST_INDUCT_TAC THENL [REWRITE_TAC[ARCS_REC; MEM]; ALL_TAC] THEN
   REPEAT GEN_TAC THEN
   STRUCT_CASES_TAC(ISPEC `h:num option` (cases "option")) THENL
@@ -487,12 +487,12 @@ let ARCS_REC_ARC_PROPS = prove
   ANTS_TAC THENL
    [ASM_REWRITE_TAC[] THEN ASM_MESON_TAC[ARITH_RULE `x < b ==> x < b + k`];
     DISCH_TAC] THEN
-  X_GEN_TAC `arc:num#num#num#num` THEN REWRITE_TAC[MEM] THEN
+  X_GEN_TAC `ac:num#num#num#num` THEN REWRITE_TAC[MEM] THEN
   DISCH_THEN(DISJ_CASES_THEN2 SUBST1_TAC ASSUME_TAC) THENL
    [ASM_REWRITE_TAC[ARC_PROJ; TRIVIAL_ARC; MEM; MEM_APPEND; LE_REFL] THEN
     REPEAT CONJ_TAC THEN (ASM_ARITH_TAC ORELSE ASM_MESON_TAC[]);
     FIRST_X_ASSUM(MP_TAC o C MATCH_MP
-     (ASSUME `MEM (arc:num#num#num#num) (ARCS_REC a 0 (base + k) t)`)) THEN
+     (ASSUME `MEM (ac:num#num#num#num) (ARCS_REC a 0 (base + k) t)`)) THEN
     REWRITE_TAC[MEM; MEM_APPEND] THEN STRIP_TAC THEN ASM_REWRITE_TAC[] THEN
     REPEAT CONJ_TAC THEN (ASM_ARITH_TAC ORELSE ASM_MESON_TAC[])]);;
 
@@ -565,11 +565,11 @@ let ARCS_REC_COUNTS = prove
         ==> ARC_COUNT f0 x (ARCS_REC a 0 (base + k) t) = 0`
   ASSUME_TAC THENL
    [X_GEN_TAC `x:num` THEN DISCH_TAC THEN MATCH_MP_TAC ARC_COUNT_ZERO THEN
-    X_GEN_TAC `arc:num#num#num#num` THEN DISCH_TAC THEN
+    X_GEN_TAC `ac:num#num#num#num` THEN DISCH_TAC THEN
     FIRST_X_ASSUM(MP_TAC o C MATCH_MP
-     (ASSUME `MEM (arc:num#num#num#num) (ARCS_REC a 0 (base + k) t)`)) THEN
+     (ASSUME `MEM (ac:num#num#num#num) (ARCS_REC a 0 (base + k) t)`)) THEN
     DISCH_THEN(REPEAT_TCL CONJUNCTS_THEN ASSUME_TAC) THEN
-    SUBGOAL_THEN `~MEM (x:num) (CONS a R2) /\ ~(ARC_BASE arc <= x)`
+    SUBGOAL_THEN `~MEM (x:num) (CONS a R2) /\ ~(ARC_BASE ac <= x)`
     STRIP_ASSUME_TAC THENL
      [FIRST_X_ASSUM DISJ_CASES_TAC THENL
        [CONJ_TAC THENL [ASM_MESON_TAC[]; ALL_TAC] THEN
@@ -579,10 +579,10 @@ let ARCS_REC_COUNTS = prove
       ALL_TAC] THEN
     ASM_REWRITE_TAC[MEM_ARC_VERTS; DE_MORGAN_THM] THEN
     UNDISCH_TAC `~MEM (x:num) (CONS a R2)` THEN
-    UNDISCH_TAC `MEM (ARC_A arc) (CONS a R2)` THEN
-    UNDISCH_TAC `MEM (ARC_B arc) R2` THEN
+    UNDISCH_TAC `MEM (ARC_A ac) (CONS a R2)` THEN
+    UNDISCH_TAC `MEM (ARC_B ac) R2` THEN
     UNDISCH_TAC
-     `!x. MEM x (BETWEEN (VERTICES f0) (ARC_A arc) (ARC_B arc))
+     `!x. MEM x (BETWEEN (VERTICES f0) (ARC_A ac) (ARC_B ac))
           ==> MEM x R2 /\ ~MEM x (CONS a (SOMES t))` THEN
     REWRITE_TAC[MEM] THEN MESON_TAC[];
     ALL_TAC] THEN
@@ -720,8 +720,8 @@ let ANAT_STATE = new_definition
                 ~(h = f0) \/
                 MEM h pieces /\ MEM x (VERTICES h) \/
                 h = f /\ MEM x (VERTICES f))) /\
-    ALL2 (\arc h. !x. MEM x (VERTICES h) <=> MEM x (ARC_VERTS f0 arc))
-         (FILTER (\arc. ~TRIVIAL_ARC f0 arc) A) pieces`;;
+    ALL2 (\ac h. !x. MEM x (VERTICES h) <=> MEM x (ARC_VERTS f0 ac))
+         (FILTER (\ac. ~TRIVIAL_ARC f0 ac) A) pieces`;;
 
 let ANAT_RESULT = new_definition
  `ANAT_RESULT g0 f0 g g' pv len arcs <=>
@@ -734,8 +734,8 @@ let ANAT_RESULT = new_definition
       DISTINCT pieces /\ ALL (\h. ~FINAL_FACE h) pieces /\
       (!h. MEM h pieces ==> ~(MEM h (FACES g0) /\ ~(h = f0))) /\
       ~(MEM poly (FACES g0) /\ ~(poly = f0)) /\
-      ALL2 (\arc h. !x. MEM x (VERTICES h) <=> MEM x (ARC_VERTS f0 arc))
-           (FILTER (\arc. ~TRIVIAL_ARC f0 arc) arcs) pieces /\
+      ALL2 (\ac h. !x. MEM x (VERTICES h) <=> MEM x (ARC_VERTS f0 ac))
+           (FILTER (\ac. ~TRIVIAL_ARC f0 ac) arcs) pieces /\
       (!x h. x < COUNT_VERTICES g'
              ==> (MEM h (FACES_AT g' x) <=>
                   x < COUNT_VERTICES g0 /\ MEM h (FACES_AT g0 x) /\
@@ -1521,9 +1521,9 @@ let SUBDIV_FACE_FACES_AT_ANATOMY = prove
      w < COUNT_VERTICES (SUBDIV_FACE g f vl) /\
      MEM h (FACES_AT (SUBDIV_FACE g f vl) w)
      ==> (w < COUNT_VERTICES g /\ MEM h (FACES_AT g w) /\ ~(h = f)) \/
-         (?arc. MEM arc (PIECE_ARCS f (COUNT_VERTICES g) vl) /\
+         (?ac. MEM ac (PIECE_ARCS f (COUNT_VERTICES g) vl) /\
                 ~FINAL_FACE h /\ MEM w (VERTICES h) /\
-                (!x. MEM x (VERTICES h) <=> MEM x (ARC_VERTS f arc))) \/
+                (!x. MEM x (VERTICES h) <=> MEM x (ARC_VERTS f ac))) \/
          (FINAL_FACE h /\ LENGTH (VERTICES h) = LENGTH vl /\
           MEM w (VERTICES h) /\
           (!x. MEM x (VERTICES h) <=>
@@ -1542,12 +1542,12 @@ let SUBDIV_FACE_FACES_AT_ANATOMY = prove
    [DISJ1_TAC THEN ASM_REWRITE_TAC[];
     DISJ2_TAC THEN DISJ1_TAC THEN
     MP_TAC(ISPECL
-     [`\arc h. !x. MEM x (VERTICES h) <=> MEM x (ARC_VERTS f arc)`;
-      `FILTER (\arc. ~TRIVIAL_ARC f arc) (ARCS (COUNT_VERTICES g) vl)`;
+     [`\ac h. !x. MEM x (VERTICES h) <=> MEM x (ARC_VERTS f ac)`;
+      `FILTER (\ac. ~TRIVIAL_ARC f ac) (ARCS (COUNT_VERTICES g) vl)`;
       `pieces:face list`; `h:face`] ALL2_MEM_RIGHT) THEN
     ASM_REWRITE_TAC[] THEN
-    DISCH_THEN(X_CHOOSE_THEN `arc:num#num#num#num` STRIP_ASSUME_TAC) THEN
-    EXISTS_TAC `arc:num#num#num#num` THEN ASM_REWRITE_TAC[PIECE_ARCS] THEN
+    DISCH_THEN(X_CHOOSE_THEN `ac:num#num#num#num` STRIP_ASSUME_TAC) THEN
+    EXISTS_TAC `ac:num#num#num#num` THEN ASM_REWRITE_TAC[PIECE_ARCS] THEN
     UNDISCH_TAC `ALL (\h. ~FINAL_FACE h) pieces` THEN
     REWRITE_TAC[GSYM ALL_MEM] THEN DISCH_THEN(MP_TAC o SPEC `h:face`) THEN
     ASM_REWRITE_TAC[];
@@ -1670,16 +1670,16 @@ let POLY_VLISTS_ARC_FACTS = prove
       ALL_TAC] THEN
     REWRITE_TAC[ARC_COUNT; PIECES_AT; PIECE_ARCS; ARCS; HD; TL; THE] THEN
     AP_TERM_TAC THEN MATCH_MP_TAC FILTER_EQ_MEM THEN
-    X_GEN_TAC `arc:num#num#num#num` THEN REWRITE_TAC[MEM_FILTER] THEN
+    X_GEN_TAC `ac:num#num#num#num` THEN REWRITE_TAC[MEM_FILTER] THEN
     DISCH_THEN(CONJUNCTS_THEN2 ASSUME_TAC ASSUME_TAC) THEN
-    USE_THEN "AP" (MP_TAC o SPEC `arc:num#num#num#num`) THEN
+    USE_THEN "AP" (MP_TAC o SPEC `ac:num#num#num#num`) THEN
     ANTS_TAC THENL
      [FIRST_ASSUM ACCEPT_TAC;
       DISCH_THEN(REPEAT_TCL CONJUNCTS_THEN ASSUME_TAC)] THEN
     REWRITE_TAC[MEM_ARC_VERTS] THEN
     SUBGOAL_THEN
-     `~MEM u (BETWEEN (VERTICES f) (ARC_A arc) (ARC_B arc)) /\
-      ~(ARC_BASE arc <= u)`
+     `~MEM u (BETWEEN (VERTICES f) (ARC_A ac) (ARC_B ac)) /\
+      ~(ARC_BASE ac <= u)`
     STRIP_ASSUME_TAC THENL
      [CONJ_TAC THENL [ASM_MESON_TAC[MEM]; ASM_ARITH_TAC]; ALL_TAC] THEN
     ASM_REWRITE_TAC[];
@@ -1688,8 +1688,8 @@ let POLY_VLISTS_ARC_FACTS = prove
     GEN_TAC THEN STRIP_TAC THEN USE_THEN "C3" MATCH_MP_TAC THEN
     ASM_REWRITE_TAC[];
     GEN_TAC THEN STRIP_TAC THEN MATCH_MP_TAC ARC_COUNT_ZERO THEN
-    X_GEN_TAC `arc:num#num#num#num` THEN DISCH_TAC THEN
-    USE_THEN "AP" (MP_TAC o SPEC `arc:num#num#num#num`) THEN
+    X_GEN_TAC `ac:num#num#num#num` THEN DISCH_TAC THEN
+    USE_THEN "AP" (MP_TAC o SPEC `ac:num#num#num#num`) THEN
     ANTS_TAC THENL
      [FIRST_ASSUM ACCEPT_TAC;
       DISCH_THEN(REPEAT_TCL CONJUNCTS_THEN ASSUME_TAC)] THEN
@@ -1746,7 +1746,7 @@ let SUBDIV_FACE_XCOUNTS = prove
    [REWRITE_TAC[ARC_COUNT] THEN CONV_TAC SYM_CONV THEN
     MATCH_MP_TAC ALL2_LENGTH_FILTER THEN
     EXISTS_TAC
-     `\arc h. !x. MEM x (VERTICES h) <=> MEM x (ARC_VERTS f arc)` THEN
+     `\ac h. !x. MEM x (VERTICES h) <=> MEM x (ARC_VERTS f ac)` THEN
     ASM_REWRITE_TAC[] THEN REPEAT GEN_TAC THEN REWRITE_TAC[] THEN
     DISCH_THEN(fun th -> REWRITE_TAC[th]);
     ALL_TAC] THEN

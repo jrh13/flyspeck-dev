@@ -1,10 +1,44 @@
 
 
+flyspeck_needs "graph/tg_eval_db.hl";;
+flyspeck_needs "graph/tg_archive.hl";;
 
 prioritize_num();;
 
 module Tg_eval_compiled = struct
 
+open Tg_list;;
+open Tg_graph;;
+open Tg_enum;;
+open Tg_tame;;
+open Tg_iso;;
+open Tg_exec;;
+open Tg_check;;
+open Tg_sound;;
+open Tg_mono;;
+open Tg_lbthm;;
+open Tg_isothm;;
+open Tg_newverts;;
+open Tg_archive_data;;
+open Tg_archive;;
+open Tg_wf;;
+open Tg_wf_inv;;
+open Tg_inv;;
+open Tg_xlb;;
+open Tg_xcheck;;
+open Tg_arcs;;
+open Tg_split_inv;;
+open Tg_enum_props;;
+open Tg_subdiv_inv;;
+open Tg_xlbthm;;
+open Tg_xdriver_lemmas;;
+open Tg_enum_fast;;
+open Tg_enum_fast2;;
+open Tg_xstats;;
+open Tg_leaf;;
+open Tg_leaf_exec;;
+open Tg_eval_support;;
+open Tg_eval_db;;
 let COND_T = (standardize o prove)(`(if T then (t:A) else e) = t`, REWRITE_TAC[]) and
     COND_F = (standardize o prove)(`(if F then (t:A) else e) = e`, REWRITE_TAC[]);;
 
@@ -4971,12 +5005,12 @@ let f_ARC_BASE =
     | [th1] -> th1
     | _ -> failwith "error"
      in
-  let var_arc = standardize_tm (mk_var ("arc", `:num#num#num#num`)) in
-  let rec f_ARC_BASE arc opt_th =
-    let base_th = trans_opt opt_th (INST [arc, var_arc] ARC_BASE_case1) in
+  let var_ac = standardize_tm (mk_var ("ac", `:num#num#num#num`)) in
+  let rec f_ARC_BASE ac opt_th =
+    let base_th = trans_opt opt_th (INST [ac, var_ac] ARC_BASE_case1) in
     match concl base_th with
     | Comb (_, Comb (a2, Comb (a1, _))) ->
-      let r1 = f_SND_num_num_num_num arc None in
+      let r1 = f_SND_num_num_num_num ac None in
       let r2 =
         let r2 = MK_COMB (REFL a1, r1) in
         f_SND_num_num_num (rand (concl r1)) (Some r2) in
@@ -4993,11 +5027,11 @@ let f_IVL_FAST_abs1 =
     | [th1] -> th1
     | _ -> failwith "error"
      in
-  let var_rot = standardize_tm (mk_var ("rot", `:(num)list`)) in
+  let var_rvs = standardize_tm (mk_var ("rvs", `:(num)list`)) in
   let var_k = standardize_tm (mk_var ("k", `:num`)) in
-  let rec f_IVL_FAST_abs1 rot k opt_th =
-    let base_th = trans_opt opt_th (INST [k, var_k; rot, var_rot] abs_def_51_case1) in
-    f_EL_num k rot (Some base_th) in
+  let rec f_IVL_FAST_abs1 rvs k opt_th =
+    let base_th = trans_opt opt_th (INST [k, var_k; rvs, var_rvs] abs_def_51_case1) in
+    f_EL_num k rvs (Some base_th) in
   f_IVL_FAST_abs1
 ;;
 
@@ -5007,13 +5041,13 @@ let f_IVL_FAST =
     | [th1] -> th1
     | _ -> failwith "error"
      in
-  let var_rot = standardize_tm (mk_var ("rot", `:(num)list`)) in
+  let var_rvs = standardize_tm (mk_var ("rvs", `:(num)list`)) in
   let var_is = standardize_tm (mk_var ("is", `:(num)list`)) in
-  let rec f_IVL_FAST rot is opt_th =
-    let base_th = trans_opt opt_th (INST [is, var_is; rot, var_rot] no_abs_IVL_FAST_case1) in
+  let rec f_IVL_FAST rvs is opt_th =
+    let base_th = trans_opt opt_th (INST [is, var_is; rvs, var_rvs] no_abs_IVL_FAST_case1) in
     match concl base_th with
     | Comb (_, Comb (a2, Comb (Comb (_, a1), _))) ->
-      let r1 = (a1, f_IVL_FAST_abs1 rot) in
+      let r1 = (a1, f_IVL_FAST_abs1 rvs) in
       let r2 = f_MAP_num_num r1 is None in
       let r3 = MK_COMB (REFL a2, r2) in
       f_HIDE_DUPS_num (rand (concl r2)) (Some (TRANS base_th r3))
@@ -5241,10 +5275,10 @@ let f_ARC_A =
     | [th1] -> th1
     | _ -> failwith "error"
      in
-  let var_arc = standardize_tm (mk_var ("arc", `:num#num#num#num`)) in
-  let rec f_ARC_A arc opt_th =
-    let base_th = trans_opt opt_th (INST [arc, var_arc] ARC_A_case1) in
-    f_FST_num_num_num_num arc (Some base_th) in
+  let var_ac = standardize_tm (mk_var ("ac", `:num#num#num#num`)) in
+  let rec f_ARC_A ac opt_th =
+    let base_th = trans_opt opt_th (INST [ac, var_ac] ARC_A_case1) in
+    f_FST_num_num_num_num ac (Some base_th) in
   f_ARC_A
 ;;
 
@@ -5254,12 +5288,12 @@ let f_ARC_B =
     | [th1] -> th1
     | _ -> failwith "error"
      in
-  let var_arc = standardize_tm (mk_var ("arc", `:num#num#num#num`)) in
-  let rec f_ARC_B arc opt_th =
-    let base_th = trans_opt opt_th (INST [arc, var_arc] ARC_B_case1) in
+  let var_ac = standardize_tm (mk_var ("ac", `:num#num#num#num`)) in
+  let rec f_ARC_B ac opt_th =
+    let base_th = trans_opt opt_th (INST [ac, var_ac] ARC_B_case1) in
     match concl base_th with
     | Comb (_, Comb (a2, Comb (a1, _))) ->
-      let r1 = f_SND_num_num_num_num arc None in
+      let r1 = f_SND_num_num_num_num ac None in
       let r2 =
         let r2 = MK_COMB (REFL a1, r1) in
         f_SND_num_num_num (rand (concl r1)) (Some r2) in
@@ -5277,12 +5311,12 @@ let f_PIECES_AT_abs1 =
     | _ -> failwith "error"
      in
   let var_u = standardize_tm (mk_var ("u", `:num`)) in
-  let var_arc = standardize_tm (mk_var ("arc", `:num#num#num#num`)) in
-  let rec f_PIECES_AT_abs1 u arc opt_th =
-    let base_th = trans_opt opt_th (INST [arc, var_arc; u, var_u] abs_def_68_case1) in
+  let var_ac = standardize_tm (mk_var ("ac", `:num#num#num#num`)) in
+  let rec f_PIECES_AT_abs1 u ac opt_th =
+    let base_th = trans_opt opt_th (INST [ac, var_ac; u, var_u] abs_def_68_case1) in
     match concl base_th with
     | Comb (_, Comb (Comb (a1, _), (Comb (a2, _) as a3))) ->
-      let r1 = f_ARC_A arc None in
+      let r1 = f_ARC_A ac None in
       let r2 =
         let r2 = MK_COMB (REFL a2, r1) in
         f_EQ_num u (rand (concl r1)) (Some r2) in
@@ -5294,7 +5328,7 @@ let f_PIECES_AT_abs1 =
         let th0 = MK_COMB (MK_COMB (REFL a1, r2), REFL a3) in
         let th1 = INST[a3, p_var_bool] F_OR in
         let base_th = TRANS (TRANS base_th th0) th1 in
-        let r3 = f_ARC_B arc None in
+        let r3 = f_ARC_B ac None in
         let r4 = MK_COMB (REFL a2, r3) in
         f_EQ_num u (rand (concl r3)) (Some (TRANS base_th r4))
     | _ -> failwith "bad pattern"
@@ -5670,12 +5704,12 @@ let f_ARC_K =
     | [th1] -> th1
     | _ -> failwith "error"
      in
-  let var_arc = standardize_tm (mk_var ("arc", `:num#num#num#num`)) in
-  let rec f_ARC_K arc opt_th =
-    let base_th = trans_opt opt_th (INST [arc, var_arc] ARC_K_case1) in
+  let var_ac = standardize_tm (mk_var ("ac", `:num#num#num#num`)) in
+  let rec f_ARC_K ac opt_th =
+    let base_th = trans_opt opt_th (INST [ac, var_ac] ARC_K_case1) in
     match concl base_th with
     | Comb (_, Comb (a1, _)) ->
-      let r1 = f_SND_num_num_num_num arc None in
+      let r1 = f_SND_num_num_num_num ac None in
       let r2 = MK_COMB (REFL a1, r1) in
       f_FST_num_num_num (rand (concl r1)) (Some (TRANS base_th r2))
     | _ -> failwith "bad pattern"
@@ -5690,21 +5724,21 @@ let f_ARC_VERTS =
     | _ -> failwith "error"
      in
   let var_f = standardize_tm (mk_var ("f", `:face`)) in
-  let var_arc = standardize_tm (mk_var ("arc", `:num#num#num#num`)) in
-  let rec f_ARC_VERTS f arc opt_th =
-    let base_th = trans_opt opt_th (INST [arc, var_arc; f, var_f] ARC_VERTS_case1) in
+  let var_ac = standardize_tm (mk_var ("ac", `:num#num#num#num`)) in
+  let rec f_ARC_VERTS f ac opt_th =
+    let base_th = trans_opt opt_th (INST [ac, var_ac; f, var_f] ARC_VERTS_case1) in
     match concl base_th with
     | Comb (_, Comb (Comb (a6, Comb (_, Comb (Comb (Comb (a1, _), _), _))), Comb (Comb (_, Comb (Comb (a2, _), a3)), Comb (Comb (a5, _), Comb (Comb (a4, _), _))))) ->
-      let r1 = f_ARC_A arc None in
+      let r1 = f_ARC_A ac None in
       let r2 = f_VERTICES f None in
-      let r3 = f_ARC_B arc None in
+      let r3 = f_ARC_B ac None in
       let r4 =
         let r4 = MK_COMB (MK_COMB (MK_COMB (REFL a1, r2), r1), r3) in
         f_BETWEEN_num (rand (concl r2)) (rand (concl r1)) (rand (concl r3)) (Some r4) in
       let r5 = MK_COMB (MK_COMB (REFL a2, r1), r4) in
       let r6 = MK_COMB (MK_COMB (REFL a2, r3), REFL a3) in
-      let r7 = f_ARC_BASE arc None in
-      let r8 = f_ARC_K arc None in
+      let r7 = f_ARC_BASE ac None in
+      let r8 = f_ARC_K ac None in
       let r9 =
         let r9 = MK_COMB (MK_COMB (REFL a4, r7), r8) in
         f_ADD (rand (concl r7)) (rand (concl r8)) (Some r9) in
@@ -5730,12 +5764,12 @@ let f_LEAF_SEP_PIECES_abs1 =
   let var_u = standardize_tm (mk_var ("u", `:num`)) in
   let var_w = standardize_tm (mk_var ("w", `:num`)) in
   let var_f = standardize_tm (mk_var ("f", `:face`)) in
-  let var_arc = standardize_tm (mk_var ("arc", `:num#num#num#num`)) in
-  let rec f_LEAF_SEP_PIECES_abs1 u w f arc opt_th =
-    let base_th = trans_opt opt_th (INST [arc, var_arc; f, var_f; w, var_w; u, var_u] abs_def_70_case1) in
+  let var_ac = standardize_tm (mk_var ("ac", `:num#num#num#num`)) in
+  let rec f_LEAF_SEP_PIECES_abs1 u w f ac opt_th =
+    let base_th = trans_opt opt_th (INST [ac, var_ac; f, var_f; w, var_w; u, var_u] abs_def_70_case1) in
     match concl base_th with
     | Comb (_, Comb (a5, Comb (Comb (a2, Comb (a1, _)), (Comb (a3, _) as a4)))) ->
-      let r1 = f_ARC_VERTS f arc None in
+      let r1 = f_ARC_VERTS f ac None in
       let r2 =
         let r2 = MK_COMB (REFL a1, r1) in
         f_MEM_num u (rand (concl r1)) (Some r2) in
@@ -6775,12 +6809,12 @@ let f_TRIVIAL_ARC =
     | _ -> failwith "error"
      in
   let var_f = standardize_tm (mk_var ("f", `:face`)) in
-  let var_arc = standardize_tm (mk_var ("arc", `:num#num#num#num`)) in
-  let rec f_TRIVIAL_ARC f arc opt_th =
-    let base_th = trans_opt opt_th (INST [arc, var_arc; f, var_f] TRIVIAL_ARC_case1) in
+  let var_ac = standardize_tm (mk_var ("ac", `:num#num#num#num`)) in
+  let rec f_TRIVIAL_ARC f ac opt_th =
+    let base_th = trans_opt opt_th (INST [ac, var_ac; f, var_f] TRIVIAL_ARC_case1) in
     match concl base_th with
     | Comb (_, Comb (Comb (a2, Comb (_, a1)), (Comb (Comb (a4, Comb (a3, _)), _) as a5))) ->
-      let r1 = f_ARC_K arc None in
+      let r1 = f_ARC_K ac None in
       let r2 =
         let r2 = MK_COMB (MK_COMB (REFL a4, r1), REFL a1) in
         f_EQ_num (rand (concl r1)) a1 (Some r2) in
@@ -6788,11 +6822,11 @@ let f_TRIVIAL_ARC =
         let th0 = MK_COMB (MK_COMB (REFL a2, r2), REFL a5) in
         let th1 = INST[a5, p_var_bool] T_AND in
         let base_th = TRANS (TRANS base_th th0) th1 in
-        let r3 = f_ARC_A arc None in
+        let r3 = f_ARC_A ac None in
         let r4 =
           let r4 = MK_COMB (REFL a3, r3) in
           f_NEXT_VERTEX f (rand (concl r3)) (Some r4) in
-        let r5 = f_ARC_B arc None in
+        let r5 = f_ARC_B ac None in
         let r6 = MK_COMB (MK_COMB (REFL a4, r4), r5) in
         f_EQ_num (rand (concl r4)) (rand (concl r5)) (Some (TRANS base_th r6))
       else
@@ -6811,12 +6845,12 @@ let f_PIECE_ARCS_abs1 =
     | _ -> failwith "error"
      in
   let var_f = standardize_tm (mk_var ("f", `:face`)) in
-  let var_arc = standardize_tm (mk_var ("arc", `:num#num#num#num`)) in
-  let rec f_PIECE_ARCS_abs1 f arc opt_th =
-    let base_th = trans_opt opt_th (INST [arc, var_arc; f, var_f] abs_def_67_case1) in
+  let var_ac = standardize_tm (mk_var ("ac", `:num#num#num#num`)) in
+  let rec f_PIECE_ARCS_abs1 f ac opt_th =
+    let base_th = trans_opt opt_th (INST [ac, var_ac; f, var_f] abs_def_67_case1) in
     match concl base_th with
     | Comb (_, Comb (a1, _)) ->
-      let r1 = f_TRIVIAL_ARC f arc None in
+      let r1 = f_TRIVIAL_ARC f ac None in
       let r2 = MK_COMB (REFL a1, r1) in
       f_NOT (rand (concl r1)) (Some (TRANS base_th r2))
     | _ -> failwith "bad pattern"
@@ -8444,12 +8478,12 @@ let f_DUP_EDGE_IDX =
     | [th1] -> th1
     | _ -> failwith "error"
      in
-  let var_rot = standardize_tm (mk_var ("rot", `:(num)list`)) in
+  let var_rvs = standardize_tm (mk_var ("rvs", `:(num)list`)) in
   let var_nbrs = standardize_tm (mk_var ("nbrs", `:((num)list)list`)) in
   let var_i = standardize_tm (mk_var ("i", `:num`)) in
   let var_j = standardize_tm (mk_var ("j", `:num`)) in
-  let rec f_DUP_EDGE_IDX rot nbrs i j opt_th =
-    let base_th = trans_opt opt_th (INST [j, var_j; i, var_i; rot, var_rot; nbrs, var_nbrs] DUP_EDGE_IDX_case1) in
+  let rec f_DUP_EDGE_IDX rvs nbrs i j opt_th =
+    let base_th = trans_opt opt_th (INST [j, var_j; i, var_i; rvs, var_rvs; nbrs, var_nbrs] DUP_EDGE_IDX_case1) in
     match concl base_th with
     | Comb (_, Comb (Comb (a4, Comb ((Comb (_, a3) as a2), Comb (Comb (a1, _), _))), (Comb (_, (Comb (Comb (a5, _), _) as a6)) as a7))) ->
       let r1 = f_SUB j i None in
@@ -8460,7 +8494,7 @@ let f_DUP_EDGE_IDX =
         let th0 = MK_COMB (MK_COMB (REFL a4, r2), REFL a7) in
         let th1 = INST[a7, p_var_bool] T_AND in
         let base_th = TRANS (TRANS base_th th0) th1 in
-        let r3 = f_LENGTH_num rot None in
+        let r3 = f_LENGTH_num rvs None in
         let r4 =
           let r4 = MK_COMB (MK_COMB (REFL a1, r3), r1) in
           f_SUB (rand (concl r3)) (rand (concl r1)) (Some r4) in
@@ -8471,7 +8505,7 @@ let f_DUP_EDGE_IDX =
           let th0 = MK_COMB (MK_COMB (REFL a4, r5), REFL a6) in
           let th1 = INST[a6, p_var_bool] T_AND in
           let base_th = TRANS (TRANS base_th th0) th1 in
-          let r6 = f_EL_num j rot None in
+          let r6 = f_EL_num j rvs None in
           let r7 = f_EL_num_list i nbrs None in
           let r8 = MK_COMB (MK_COMB (REFL a5, r6), r7) in
           f_MEM_num (rand (concl r6)) (rand (concl r7)) (Some (TRANS base_th r8))
@@ -8928,13 +8962,13 @@ let f_CONTAINS_DUPLICATE_EDGE_IDX_abs1 =
     | [th1] -> th1
     | _ -> failwith "error"
      in
-  let var_rot = standardize_tm (mk_var ("rot", `:(num)list`)) in
+  let var_rvs = standardize_tm (mk_var ("rvs", `:(num)list`)) in
   let var_nbrs = standardize_tm (mk_var ("nbrs", `:((num)list)list`)) in
   let var_i = standardize_tm (mk_var ("i", `:num`)) in
   let var_j = standardize_tm (mk_var ("j", `:num`)) in
-  let rec f_CONTAINS_DUPLICATE_EDGE_IDX_abs1 rot nbrs i j opt_th =
-    let base_th = trans_opt opt_th (INST [j, var_j; i, var_i; nbrs, var_nbrs; rot, var_rot] abs_def_53_case1) in
-    f_DUP_EDGE_IDX rot nbrs i j (Some base_th) in
+  let rec f_CONTAINS_DUPLICATE_EDGE_IDX_abs1 rvs nbrs i j opt_th =
+    let base_th = trans_opt opt_th (INST [j, var_j; i, var_i; nbrs, var_nbrs; rvs, var_rvs] abs_def_53_case1) in
+    f_DUP_EDGE_IDX rvs nbrs i j (Some base_th) in
   f_CONTAINS_DUPLICATE_EDGE_IDX_abs1
 ;;
 
@@ -8944,14 +8978,14 @@ let f_CONTAINS_DUPLICATE_EDGE_IDX =
     | [th1] -> th1
     | _ -> failwith "error"
      in
-  let var_rot = standardize_tm (mk_var ("rot", `:(num)list`)) in
+  let var_rvs = standardize_tm (mk_var ("rvs", `:(num)list`)) in
   let var_nbrs = standardize_tm (mk_var ("nbrs", `:((num)list)list`)) in
   let var_is = standardize_tm (mk_var ("is", `:(num)list`)) in
-  let rec f_CONTAINS_DUPLICATE_EDGE_IDX rot nbrs is opt_th =
-    let base_th = trans_opt opt_th (INST [is, var_is; nbrs, var_nbrs; rot, var_rot] no_abs_CONTAINS_DUPLICATE_EDGE_IDX_case1) in
+  let rec f_CONTAINS_DUPLICATE_EDGE_IDX rvs nbrs is opt_th =
+    let base_th = trans_opt opt_th (INST [is, var_is; nbrs, var_nbrs; rvs, var_rvs] no_abs_CONTAINS_DUPLICATE_EDGE_IDX_case1) in
     match concl base_th with
     | Comb (_, Comb (Comb (_, a1), _)) ->
-      let r1 = (a1, f_CONTAINS_DUPLICATE_EDGE_IDX_abs1 rot nbrs) in
+      let r1 = (a1, f_CONTAINS_DUPLICATE_EDGE_IDX_abs1 rvs nbrs) in
       f_CONTAINS_UNACCEPTABLE_EDGE r1 is (Some base_th)
     | _ -> failwith "bad pattern"
      in
@@ -8964,14 +8998,14 @@ let f_PV_FAST2_abs1 =
     | [th1] -> th1
     | _ -> failwith "error"
      in
-  let var_rot = standardize_tm (mk_var ("rot", `:(num)list`)) in
+  let var_rvs = standardize_tm (mk_var ("rvs", `:(num)list`)) in
   let var_nbrs = standardize_tm (mk_var ("nbrs", `:((num)list)list`)) in
   let var_is = standardize_tm (mk_var ("is", `:(num)list`)) in
-  let rec f_PV_FAST2_abs1 rot nbrs is opt_th =
-    let base_th = trans_opt opt_th (INST [is, var_is; nbrs, var_nbrs; rot, var_rot] abs_def_54_case1) in
+  let rec f_PV_FAST2_abs1 rvs nbrs is opt_th =
+    let base_th = trans_opt opt_th (INST [is, var_is; nbrs, var_nbrs; rvs, var_rvs] abs_def_54_case1) in
     match concl base_th with
     | Comb (_, Comb (a1, _)) ->
-      let r1 = f_CONTAINS_DUPLICATE_EDGE_IDX rot nbrs is None in
+      let r1 = f_CONTAINS_DUPLICATE_EDGE_IDX rvs nbrs is None in
       let r2 = MK_COMB (REFL a1, r1) in
       f_NOT (rand (concl r1)) (Some (TRANS base_th r2))
     | _ -> failwith "bad pattern"
@@ -8985,15 +9019,15 @@ let f_PV_FAST2 =
     | [th1] -> th1
     | _ -> failwith "error"
      in
-  let var_rot = standardize_tm (mk_var ("rot", `:(num)list`)) in
+  let var_rvs = standardize_tm (mk_var ("rvs", `:(num)list`)) in
   let var_nbrs = standardize_tm (mk_var ("nbrs", `:((num)list)list`)) in
   let var_iss = standardize_tm (mk_var ("iss", `:((num)list)list`)) in
-  let rec f_PV_FAST2 rot nbrs iss opt_th =
-    let base_th = trans_opt opt_th (INST [rot, var_rot; iss, var_iss; nbrs, var_nbrs] no_abs_PV_FAST2_case1) in
+  let rec f_PV_FAST2 rvs nbrs iss opt_th =
+    let base_th = trans_opt opt_th (INST [rvs, var_rvs; iss, var_iss; nbrs, var_nbrs] no_abs_PV_FAST2_case1) in
     match concl base_th with
     | Comb (_, Comb ((Comb (_, a1) as a3), Comb (Comb (_, a2), _))) ->
-      let r1 = (a1, f_IVL_FAST rot) in
-      let r2 = (a2, f_PV_FAST2_abs1 rot nbrs) in
+      let r1 = (a1, f_IVL_FAST rvs) in
+      let r2 = (a2, f_PV_FAST2_abs1 rvs nbrs) in
       let r3 = f_FILTER_num_list r2 iss None in
       let r4 = MK_COMB (REFL a3, r3) in
       f_MAP_num_list_num_option_list r1 (rand (concl r3)) (Some (TRANS base_th r4))

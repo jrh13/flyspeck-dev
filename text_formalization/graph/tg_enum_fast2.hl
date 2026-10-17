@@ -8,8 +8,8 @@
 (* ========================================================================= *)
 
 
-(* positions i < j on rot = ROTATE_TO v (VERTICES f) and nbrs =             *)
-(* MAP (NEIGHBORS g) rot: directed lengths j - i and LENGTH rot - (j - i)    *)
+(* positions i < j on rvs = ROTATE_TO v (VERTICES f) and nbrs =             *)
+(* MAP (NEIGHBORS g) rvs: directed lengths j - i and LENGTH rvs - (j - i)    *)
 
 flyspeck_needs "graph/tg_lbthm.hl";;
 flyspeck_needs "graph/tg_isothm.hl";;
@@ -41,17 +41,17 @@ open Tg_arcs;;
 open Tg_enum_props;;
 open Tg_enum_fast;;
 let DUP_EDGE_IDX = new_definition
- `DUP_EDGE_IDX (rot:num list) (nbrs:(num list)list) i j <=>
-    2 <= j - i /\ 2 <= LENGTH rot - (j - i) /\ MEM (EL j rot) (EL i nbrs)`;;
+ `DUP_EDGE_IDX (rvs:num list) (nbrs:(num list)list) i j <=>
+    2 <= j - i /\ 2 <= LENGTH rvs - (j - i) /\ MEM (EL j rvs) (EL i nbrs)`;;
 
 let CONTAINS_DUPLICATE_EDGE_IDX = new_definition
- `CONTAINS_DUPLICATE_EDGE_IDX rot nbrs is <=>
-    CONTAINS_UNACCEPTABLE_EDGE (\i j. DUP_EDGE_IDX rot nbrs i j) is`;;
+ `CONTAINS_DUPLICATE_EDGE_IDX rvs nbrs is <=>
+    CONTAINS_UNACCEPTABLE_EDGE (\i j. DUP_EDGE_IDX rvs nbrs i j) is`;;
 
 let PV_FAST2 = new_definition
- `PV_FAST2 rot nbrs iss =
-    MAP (IVL_FAST rot)
-        (FILTER (\is. ~CONTAINS_DUPLICATE_EDGE_IDX rot nbrs is) iss)`;;
+ `PV_FAST2 rvs nbrs iss =
+    MAP (IVL_FAST rvs)
+        (FILTER (\is. ~CONTAINS_DUPLICATE_EDGE_IDX rvs nbrs is) iss)`;;
 
 let POLY_VLISTS_FAST2 = new_definition
  `POLY_VLISTS_FAST2 n v f g =
@@ -233,10 +233,10 @@ let BETWEEN_EL_ROT = prove
 
 (* ------------------------------------------------------------------------- *)
 (* The index filter agrees with DUPLICATE_EDGE on positions i < j of         *)
-(* rot = ROTATE_TO v (VERTICES f) = APPEND Q P for VERTICES f = APPEND P Q   *)
+(* rvs = ROTATE_TO v (VERTICES f) = APPEND Q P for VERTICES f = APPEND P Q   *)
 (* (SPLIT_AT_LIN_MEM_APPEND): the directed lengths are j - i and             *)
-(* LENGTH rot - (j - i), and EL i (MAP (NEIGHBORS g) rot) = NEIGHBORS g      *)
-(* (EL i rot).                                                               *)
+(* LENGTH rvs - (j - i), and EL i (MAP (NEIGHBORS g) rvs) = NEIGHBORS g      *)
+(* (EL i rvs).                                                               *)
 (* ------------------------------------------------------------------------- *)
 
 let DUP_EDGE_IDX_EQ = prove

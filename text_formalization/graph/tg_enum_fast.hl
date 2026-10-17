@@ -38,7 +38,7 @@ let ROTATE_TO = new_definition
     APPEND (CONS v (SND (SPLIT_AT_LIN v l))) (FST (SPLIT_AT_LIN v l))`;;
 
 let IVL_FAST = new_definition
- `IVL_FAST (rot:num list) is = HIDE_DUPS (MAP (\k. EL k rot) is)`;;
+ `IVL_FAST (rvs:num list) is = HIDE_DUPS (MAP (\k. EL k rvs) is)`;;
 
 let INDEX_TO_VERTEX_LIST_FAST = new_definition
  `INDEX_TO_VERTEX_LIST_FAST f v is =
