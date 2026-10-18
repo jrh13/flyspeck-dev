@@ -1,0 +1,70 @@
+(* ========================================================================= *)
+(* graph_native/runner/runner_domains_main.hl -- graph_runner_domains: the   *)
+(* modes of graph_runner plus                                                *)
+(*                                                                           *)
+(*   domains P CERT PLAN NDOM                                                *)
+(*     one process: the main domain walks the top part, NDOM worker domains  *)
+(*     prove the tasks (largest first), the main domain assembles them;     *)
+(*     CLASS_THM line with no hypotheses                                    *)
+(*                                                                           *)
+(* Needs OCaml 5.  The workers make no definitions (all are made at load     *)
+(* time); they share the archive chunk cache, filled before they start, the *)
+(* evaluator's memo and atomic counters.  A race on a cache can at worst     *)
+(* make a task fail: theorems are an abstract type, every step is checked by *)
+(* the kernel, and each task theorem is compared with its statement before   *)
+(* it is used.                                                               *)
+(* ========================================================================= *)
+
+needs "runner_modes.hl";;
+
+module Runner_domains = struct
+
+open Runner_lib;;
+
+(* minor heap per worker domain (words): with the default the run is GC     *)
+(* bound; Gc.set in the main domain does not reach the other domains         *)
+let worker_minor_heap = ref (4 * 1024 * 1024);;
+
+let domains argv =
+  let p = int_of_string argv.(2) and cert = argv.(3) and plan = argv.(4)
+  and ndom = int_of_string argv.(5) in
+  reset_progress ();
+  let tasks = read_plan plan in
+  let ntasks = Array.length tasks in
+  prewarm_archive ();
+  let th_top = top_part p cert tasks in
+  Printf.printf "top part done: %d tasks, %d hypotheses, %.1f s\n%!" ntasks
+    (List.length (hyp th_top)) (Runner_modes.elapsed ());
+  let p_tm, _, _, _ = class_start p in
+  let order = by_size tasks in
+  let counter = Atomic.make 0 and finished = Atomic.make 0
+  and errors = Atomic.make 0 in
+  let worker () =
+    Gc.set { (Gc.get ()) with Gc.minor_heap_size = !worker_minor_heap };
+    let rec loop () =
+      let k = Atomic.fetch_and_add counter 1 in
+      if k < ntasks then begin
+        let t = tasks.(order.(k)) in
+        (try t.t_th <- Some (prove_task p_tm cert t)
+         with e ->
+           Atomic.incr errors;
+           Printf.eprintf "task %d failed: %s\n%!" order.(k)
+             (Printexc.to_string e));
+        Atomic.incr finished;
+        loop ()
+      end in
+    loop () in
+  let doms = List.init ndom (fun _ -> Domain.spawn worker) in
+  while Atomic.get finished < ntasks do
+    Unix.sleepf 30.0;
+    Printf.printf "tasks %d/%d  %.1f s\n%!" (Atomic.get finished) ntasks
+      (Runner_modes.elapsed ())
+  done;
+  List.iter Domain.join doms;
+  if Atomic.get errors > 0 then failwith "domains: task failures";
+  let th = finish p (assemble p cert tasks) in
+  Runner_modes.class_line p th "";;
+
+end;;
+
+let () = Runner_modes.dispatch [("domains", Runner_domains.domains)] Sys.argv;;

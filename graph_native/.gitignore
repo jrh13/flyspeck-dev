@@ -3,3 +3,7 @@ certgen
 certgen_all.ml
 *.cm*
 *.o
+build/
+graph_runner
+graph_runner_domains
+certsplit

@@ -1,0 +1,122 @@
+(* ========================================================================= *)
+(* graph_native/runner/runner_modes.hl -- the runner modes that need no      *)
+(* parallelism inside HOL Light (no OCaml domains, one thread per process):  *)
+(*                                                                           *)
+(*   serial P CERT                                                           *)
+(*     prove class P from certificate CERT in one process: CLASS_THM line    *)
+(*   task P CERT PLAN K I                                                    *)
+(*     worker I (0..K-1) of K: walk the top part, then prove every K-th task *)
+(*     in largest-first order starting at I; for each, a line                *)
+(*       TASK index nodes md5-of-statement                                   *)
+(*   assemble P CERT PLAN FILE...                                            *)
+(*     walk the top part, which proves the class theorem with one            *)
+(*     hypothesis per task statement; read the TASK lines of the workers'    *)
+(*     outputs and check that every task statement has the digest a worker   *)
+(*     reported for it: CLASS_THM line with the hypothesis count             *)
+(*                                                                           *)
+(* The workers are separate processes sharing nothing; run them in parallel  *)
+(* (e.g. with xargs -P) or one after another.  The assembled theorem's       *)
+(* hypotheses are task statements, each proved (with no hypotheses) by the   *)
+(* worker that printed its digest; no axiom is used anywhere.                *)
+(* ========================================================================= *)
+
+needs "runner_lib.hl";;
+
+module Runner_modes = struct
+
+open Runner_lib;;
+
+let t0 = Unix.gettimeofday ();;
+let elapsed () = Unix.gettimeofday () -. t0;;
+
+(* the conclusion only: an assembled theorem has thousands of hypotheses *)
+let class_line p th extra =
+  Printf.printf "CLASS_THM %d |- %s  hypotheses %d%s  %.1f s\n%!" p
+    (string_of_term (concl th)) (List.length (hyp th)) extra (elapsed ());;
+
+let serial argv =
+  let p = int_of_string argv.(2) and cert = argv.(3) in
+  let th = Tg_driver.run_class p cert in
+  if hyp th <> [] then failwith "serial: hypotheses remain";
+  class_line p th "";;
+
+let task argv =
+  let p = int_of_string argv.(2) and cert = argv.(3) and plan = argv.(4)
+  and k = int_of_string argv.(5) and i = int_of_string argv.(6) in
+  if k < 1 || i < 0 || i >= k then failwith "task: need 0 <= I < K";
+  reset_progress ();
+  let tasks = read_plan plan in
+  prewarm_archive ();
+  ignore (top_part p cert tasks);
+  let p_tm, _, _, _ = class_start p in
+  let order = by_size tasks in
+  let mine = ref 0 in
+  Array.iteri (fun pos ix ->
+    if pos mod k = i then begin
+      let t = tasks.(ix) in
+      let th = prove_task p_tm cert t in
+      incr mine;
+      Printf.printf "TASK %d %d %s\n%!" ix t.t_nodes (term_digest (concl th))
+    end) order;
+  Printf.printf "WORKER_DONE class %d worker %d/%d tasks %d  %.1f s\n%!"
+    p i k !mine (elapsed ());;
+
+let read_task_lines files =
+  let tbl = Hashtbl.create 100000 in
+  List.iter (fun f ->
+    let ic = Stdlib.open_in f in
+    (try while true do
+       let l = input_line ic in
+       if String.length l > 5 && String.sub l 0 5 = "TASK " then
+         Scanf.sscanf l "TASK %d %d %s" (fun ix _ d ->
+           (match Hashtbl.find_opt tbl ix with
+            | Some d' when d' <> d ->
+                failwith "assemble: two digests for a task"
+            | _ -> Hashtbl.replace tbl ix d))
+     done with End_of_file -> ());
+    close_in ic) files;
+  tbl;;
+
+let assemble_mode argv =
+  let p = int_of_string argv.(2) and cert = argv.(3) and plan = argv.(4) in
+  let files = Array.to_list (Array.sub argv 5 (Array.length argv - 5)) in
+  reset_progress ();
+  let tasks = read_plan plan in
+  let reported = read_task_lines files in
+  prewarm_archive ();
+  let th = finish p (top_part p cert tasks) in
+  let p_tm, _, _, _ = class_start p in
+  let stmt_digest = Hashtbl.create 100000 in
+  Array.iteri (fun ix t ->
+    let g = match t.t_g with
+            | Some g -> g | None -> failwith "assemble: no graph" in
+    let d = term_digest (task_stmt p_tm g) in
+    (match Hashtbl.find_opt reported ix with
+     | Some d' when d' = d -> ()
+     | Some _ ->
+         failwith (Printf.sprintf "assemble: task %d digest differs" ix)
+     | None -> failwith (Printf.sprintf "assemble: task %d not proved" ix));
+    Hashtbl.replace stmt_digest d ()) tasks;
+  List.iter (fun h ->
+    if not (Hashtbl.mem stmt_digest (term_digest h)) then
+      failwith "assemble: a hypothesis is not a task statement") (hyp th);
+  class_line p th
+    (Printf.sprintf ", each the statement of one of the %d tasks, all proved"
+       (Array.length tasks));;
+
+let usage () =
+  prerr_string
+    ("usage: graph_runner serial P CERT\n" ^
+     "       graph_runner task P CERT PLAN K I\n" ^
+     "       graph_runner assemble P CERT PLAN FILE...\n");
+  exit 2;;
+
+let dispatch extra argv =
+  let modes = [("serial", serial); ("task", task); ("assemble", assemble_mode)]
+              @ extra in
+  if Array.length argv < 4 then usage ();
+  match List.assoc_opt argv.(1) modes with
+  | Some f -> f argv
+  | None -> usage ();;
+
+end;;

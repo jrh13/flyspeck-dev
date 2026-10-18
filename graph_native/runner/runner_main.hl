@@ -1,0 +1,10 @@
+(* ========================================================================= *)
+(* graph_native/runner/runner_main.hl -- graph_runner, the runner without    *)
+(* OCaml domains (serial, task and assemble modes; see runner_modes.hl).     *)
+(* Builds with any HOL Light that has its native module build (OCaml 4.14   *)
+(* or 5).                                                                    *)
+(* ========================================================================= *)
+
+needs "runner_modes.hl";;
+
+let () = Runner_modes.dispatch [] Sys.argv;;

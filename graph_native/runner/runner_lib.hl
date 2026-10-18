@@ -1,0 +1,172 @@
+(* ========================================================================= *)
+(* graph_native/runner/runner_lib.hl -- what the native runners share.       *)
+(*                                                                           *)
+(* A class theorem TFO ARCHIVE p (SEED p) is proved by the chapter's driver  *)
+(* (graph/tg_driver.hl) from a certificate.  A task plan (certsplit) cuts    *)
+(* the certificate tree into a top part and tasks, the maximal subtrees with *)
+(* at most a threshold of nodes; each task proves TFO ARCHIVE p g for the    *)
+(* graph g at its root.                                                      *)
+(*   top_part      walks the top part; at each task root it records the      *)
+(*                 graph, skips the task's lines and ASSUMEs its theorem, so *)
+(*                 the result has one hypothesis per distinct task statement *)
+(*   prove_task    proves one task, reading its lines from its own channel   *)
+(*   assemble      walks the top part again, using proved task theorems at   *)
+(*                 the task roots (no hypotheses remain)                     *)
+(*   finish        turns |- TFO ARCHIVE p g0 into |- TFO ARCHIVE p (SEED p)  *)
+(*                 with the standard numeral p                               *)
+(*   term_digest   md5 of an injective serialization of a term, for matching *)
+(*                 task theorems proved in other processes                   *)
+(* No definition is made after loading, so the functions below only apply   *)
+(* the kernel's inference rules and read its tables.                         *)
+(* ========================================================================= *)
+
+needs "graph/tg_driver.hl";;
+
+module Runner_lib = struct
+
+open Tg_list;; open Tg_graph;; open Tg_enum;; open Tg_tame;; open Tg_iso;;
+open Tg_exec;; open Tg_check;; open Tg_sound;; open Tg_mono;; open Tg_lbthm;;
+open Tg_isothm;; open Tg_newverts;; open Tg_archive_data;; open Tg_archive;;
+open Tg_wf;; open Tg_wf_inv;; open Tg_inv;; open Tg_xlb;; open Tg_xcheck;;
+open Tg_arcs;; open Tg_split_inv;; open Tg_enum_props;; open Tg_subdiv_inv;;
+open Tg_xlbthm;; open Tg_xdriver_lemmas;; open Tg_enum_fast;;
+open Tg_enum_fast2;; open Tg_xstats;; open Tg_leaf;; open Tg_leaf_exec;;
+open Tg_eval_support;; open Tg_eval_db;; open Tg_eval_compiled;;
+open Tg_driver;;
+
+(* the certificates graph_native/certgen writes use the stronger lower bound *)
+let () = xlb_mode := true;;
+
+type task = { t_off : int; t_len : int; t_nodes : int;
+              mutable t_g : term option; mutable t_inv : thm option;
+              mutable t_th : thm option };;
+
+let read_plan planfile =
+  let ic = Stdlib.open_in planfile in
+  let n = Scanf.sscanf (input_line ic) "TASKS %d" (fun n -> n) in
+  let tasks = Array.init n (fun _ ->
+    Scanf.sscanf (input_line ic) "%d %d %d" (fun off l k ->
+      { t_off = off; t_len = l; t_nodes = k; t_g = None; t_inv = None;
+        t_th = None })) in
+  close_in ic; tasks;;
+
+(* fill the archive chunk cache before anything else reads it *)
+let prewarm_archive () =
+  let ach = Lazy.force archive_chunks_eq in
+  let n = List.length (dest_list (rand (concl ach))) in
+  for c = 0 to n - 1 do ignore (archive_chunk c) done;;
+
+(* the driver reads the class from cur_p (its polygon sizes are 3..p+3):  *)
+(* every walk of class p must set it, as Tg_driver.run_class does         *)
+let class_start p =
+  cur_p := p;
+  let p_tm = anum p in
+  let th_seed = f_SEED p_tm None in
+  let g0 = rand (concl th_seed) in
+  let inv0 = if !xlb_mode then
+               Some (EQ_MP (AP_TERM graph_inv_tm th_seed) (SPEC p_tm seed_inv))
+             else None in
+  p_tm, th_seed, g0, inv0;;
+
+let reset_progress () =
+  Atomic.set nodes_done 0; t_start := Unix.gettimeofday ();;
+
+let task_stmt p_tm g = list_mk_comb (tfo_tm, [archive_tm; p_tm; g]);;
+
+(* walk the top part with a hook at the task roots *)
+let walk_top p certfile tasks at_task =
+  let p_tm, _, g0, inv0 = class_start p in
+  let ntasks = Array.length tasks in
+  let ic = Stdlib.open_in certfile in
+  let next = ref 0 in
+  task_hook := (fun ic g' inv' ->
+    if !next < ntasks && pos_in ic = tasks.(!next).t_off then begin
+      let t = tasks.(!next) in
+      incr next;
+      seek_in ic (t.t_off + t.t_len);
+      Some (at_task t g' inv')
+    end else None);
+  let th = (try node p_tm archive_tm g0 inv0 ic
+            with e ->
+              task_hook := (fun _ _ _ -> None); close_in ic; raise e) in
+  task_hook := (fun _ _ _ -> None);
+  close_in ic;
+  if !next <> ntasks then failwith "walk_top: certificate and plan differ";
+  th;;
+
+let top_part p certfile tasks =
+  let p_tm, _, _, _ = class_start p in
+  walk_top p certfile tasks (fun t g' inv' ->
+    t.t_g <- Some g'; t.t_inv <- inv';
+    ASSUME (task_stmt p_tm g'));;
+
+(* p_tm is the class numeral (from class_start), computed once by the caller *)
+let prove_task p_tm certfile t =
+  let g = match t.t_g with Some g -> g
+          | None -> failwith "prove_task: run top_part first" in
+  let ic = Stdlib.open_in certfile in
+  seek_in ic t.t_off;
+  let th = (try node p_tm archive_tm g t.t_inv ic
+            with e -> close_in ic; raise e) in
+  let pos = pos_in ic in
+  close_in ic;
+  if pos <> t.t_off + t.t_len then failwith "prove_task: task segment differs";
+  if hyp th <> [] || not (aconv (concl th) (task_stmt p_tm g)) then
+    failwith "prove_task: unexpected theorem";
+  th;;
+
+let assemble p certfile tasks =
+  let p_tm, _, _, _ = class_start p in
+  let th = walk_top p certfile tasks (fun t g' _ ->
+    match t.t_th with
+    | Some th when aconv (concl th) (task_stmt p_tm g') -> th
+    | Some _ -> failwith "assemble: task theorem for another graph"
+    | None -> failwith "assemble: missing task theorem") in
+  if hyp th <> [] then failwith "assemble: hypotheses remain";
+  th;;
+
+let finish p th =
+  let p_tm, th_seed, _, _ = class_start p in
+  let th = EQ_MP (SYM (AP_TERM (mk_comb (mk_comb (tfo_tm, archive_tm), p_tm))
+                               th_seed)) th in
+  (* SUBS, not rewriting: for p = 0 the equation is |- _0 = NUMERAL _0, *)
+  (* whose right-hand side contains the left                            *)
+  SUBS [NUMERAL_BACK p] th;;
+
+(* tasks largest first, the order workers take them in *)
+let by_size tasks =
+  let order = Array.init (Array.length tasks) (fun i -> i) in
+  Array.sort (fun i j -> compare tasks.(j).t_nodes tasks.(i).t_nodes) order;
+  order;;
+
+let rec ser_type b ty =
+  if is_vartype ty then
+    (Buffer.add_char b 'V'; Buffer.add_string b (dest_vartype ty))
+  else
+    let c, args = dest_type ty in
+    Buffer.add_char b 'T'; Buffer.add_string b c;
+    Buffer.add_char b '('; List.iter (ser_type b) args; Buffer.add_char b ')';;
+
+let ser_name b c s =
+  Buffer.add_char b c;
+  Buffer.add_string b (string_of_int (String.length s));
+  Buffer.add_char b ':'; Buffer.add_string b s;;
+
+let rec ser_term b tm =
+  if is_var tm then
+    let n, ty = dest_var tm in (ser_name b 'v' n; ser_type b ty)
+  else if is_const tm then
+    let n, ty = dest_const tm in (ser_name b 'c' n; ser_type b ty)
+  else if is_comb tm then
+    let f, x = dest_comb tm in
+    (Buffer.add_char b '@'; ser_term b f; ser_term b x)
+  else
+    let v, bod = dest_abs tm in
+    (Buffer.add_char b '\\'; ser_term b v; ser_term b bod);;
+
+let term_digest tm =
+  let b = Buffer.create 4096 in
+  ser_term b tm;
+  Digest.to_hex (Digest.string (Buffer.contents b));;
+
+end;;
