@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_main.ml                                                         *)
+(* graph/tg_main.hl                                                          *)
 (*                                                                           *)
 (* Assembly of the classification theorem from the four class runs: a tame   *)
 (* plane graph is reached from SEED p for some p, the seed's final (p+3)-gon *)

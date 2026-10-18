@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_lbthm.ml                                                        *)
+(* graph/tg_lbthm.hl                                                         *)
 (*                                                                           *)
 (* The lower-bound theorem (Isabelle LowerBound.thy, in multiset form with   *)
 (* the certificate's side conditions in place of the graph invariants): if   *)
@@ -409,7 +409,7 @@ let LB_S_LE_WEIGHT = prove
   REWRITE_TAC[LB_S; FACE_SQUANDER_LOWER_BOUND] THEN ASM_ARITH_TAC);;
 
 (* ------------------------------------------------------------------------- *)
-(* The pruning lemmas of tame_sound.ml follow.                               *)
+(* The pruning lemmas of tg_sound.hl follow.                                 *)
 (* ------------------------------------------------------------------------- *)
 
 let TFO_LB_PROVED = prove

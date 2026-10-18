@@ -1,6 +1,6 @@
 (* ========================================================================= *)
-(* tame/tame_xlbthm.ml -- soundness of the stronger lower bound             *)
-(* (tame_xlb.ml): in every tame final descendant of g with admissible       *)
+(* graph/tg_xlbthm.hl -- soundness of the stronger lower bound              *)
+(* (tg_xlb.hl): in every tame final descendant of g with admissible         *)
 (* weight w, the faces at a vertex v carry at least COMPLETION_VALUE of v's  *)
 (* data in g (the final type of v is one of the completions), the faces    *)
 (* charged to distinct chosen vertices are distinct (separation at g,       *)

@@ -1,12 +1,12 @@
 (* ========================================================================= *)
-(* tame/tame_bridge_tame.ml -- Hales' tameness predicates, fgraph and graph  *)
-(* isomorphism (hales_defs.ml) coincide with ours under HFACE/HGRAPH         *)
-(* (tame_bridge_defs.ml); the vertex-based predicates need FACE_LIST_LEN.    *)
-(* The face-level facts (H_VERTICES, H_FINAL, OFACE_HFACE) and the graph     *)
+(* graph/tg_bridge_tame.hl -- Hales' tameness predicates, fgraph and graph   *)
+(* isomorphism (tg_hales_alias.hl) coincide with ours under HFACE/HGRAPH     *)
+(* (tg_bridge_defs.hl); the vertex-based predicates need FACE_LIST_LEN. The  *)
+(* face-level facts (H_VERTICES, H_FINAL, OFACE_HFACE) and the graph         *)
 (* projections (H_FACES, H_COUNTVERTICES, H_FACESAT) come from               *)
-(* tame_bridge_graph.ml, the list-level ones (H_SUMN, H_MAP, H_UPT, H_CONG,  *)
+(* tg_bridge_graph.hl, the list-level ones (H_SUMN, H_MAP, H_UPT, H_CONG,    *)
 (* H_INJ_ON, H_NOT_EQUAL, H_SQUANDER..., H_EXCESSTCOUNT) from                *)
-(* tame_bridge_list.ml.                                                      *)
+(* tg_bridge_list.hl.                                                        *)
 (* ========================================================================= *)
 
 

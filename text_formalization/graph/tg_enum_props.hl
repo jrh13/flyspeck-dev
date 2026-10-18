@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_enum_props.ml -- what the enumerator guarantees about a vertex  *)
+(* graph/tg_enum_props.hl -- what the enumerator guarantees about a vertex   *)
 (* option list vl of GENERATE_POLYGON i v f g: the chosen vertices SOMES vl *)
 (* start with v, are distinct vertices of f in the cyclic order of f, end   *)
 (* with the predecessor of v, a list with only two chosen vertices contains  *)

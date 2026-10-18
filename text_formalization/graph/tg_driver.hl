@@ -1,10 +1,10 @@
 (* ========================================================================= *)
-(* tame/tame_driver.ml                                                       *)
+(* graph/tg_driver.hl                                                        *)
 (*                                                                           *)
 (* The HOL driver of the certificate-checked enumeration: reads the          *)
 (* certificate stream produced by the native generator (measure/certgen),    *)
 (* evaluates the checks with the compiled evaluator, and composes the node   *)
-(* theorems TFO arch p g with the lemmas of tame_sound.ml, depth first.      *)
+(* theorems TFO arch p g with the lemmas of tg_sound.hl, depth first.        *)
 (* Entry point: run_class p certfile returns |- TFO ARCHIVE p (SEED p) with  *)
 (* standard numerals.  Nothing here extends the trusted base: every step is  *)
 (* an inference on theorems of the loaded files.                             *)
@@ -172,9 +172,9 @@ and untame_tame12o = UNTAME_TAME12O;;
 let mem_archive_el = REPLACE_NUMERALS MEM_ARCHIVE_EL;;
 let length_archive_chunks = REPLACE_NUMERALS LENGTH_ARCHIVE_CHUNKS;;
 
-(* The stronger lower bound (tame_xlb.ml, tame_xlbthm.ml): used when        *)
+(* The stronger lower bound (tg_xlb.hl, tg_xlbthm.hl): used when            *)
 (* xlb_mode is set; the driver then carries |- GRAPH_INV g through the tree  *)
-(* (tame_xdriver_lemmas.ml).                                                 *)
+(* (tg_xdriver_lemmas.hl).                                                   *)
 
 let xlb_mode = ref false;;
 let tfo_xlb = TFO_XLB_PROVED;;

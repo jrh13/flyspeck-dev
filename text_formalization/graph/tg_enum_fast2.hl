@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_enum_fast2.ml -- faster executable form of POLY_VLISTS, second  *)
+(* graph/tg_enum_fast2.hl -- faster executable form of POLY_VLISTS, second   *)
 (* step: the duplicate-edge filter decides adjacency by positions on the     *)
 (* rotated vertex list instead of two BETWEEN computations per pair, and the *)
 (* neighbour lists of the face vertices are computed once.  Proved version   *)

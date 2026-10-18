@@ -1,9 +1,9 @@
 (* ========================================================================= *)
-(* tame/tame_xdriver_lemmas.ml -- the interface lemmas the driver uses to    *)
+(* graph/tg_xdriver_lemmas.hl -- the interface lemmas the driver uses to     *)
 (* carry GRAPH_INV through the search tree: the node facts about the chosen  *)
 (* face and vertex, GRAPH_INV of every vertex-list successor of a node (in   *)
 (* ALL form over POLY_VLISTS), and the facts about the seed.  Derived from   *)
-(* tame_subdiv_inv.ml and tame_enum_props.ml.                                *)
+(* tg_subdiv_inv.hl and tg_enum_props.hl.                                    *)
 (* ========================================================================= *)
 
 flyspeck_needs "graph/tg_subdiv_inv.hl";;

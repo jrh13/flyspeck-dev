@@ -1,10 +1,10 @@
 (* ========================================================================= *)
-(* tame/tame_wf.ml -- the well-formedness invariant WF_GRAPH used by the     *)
+(* graph/tg_wf.hl -- the well-formedness invariant WF_GRAPH used by the      *)
 (* bridge to Hales' tuple representation of graphs (tame_bridge_*.ml): the   *)
 (* face list has one entry per vertex, and every face is non-empty with all  *)
 (* its vertices below the vertex count.  Only these facts make Hales' EL     *)
 (* based facesAt agree with ours under the representation map; the          *)
-(* preservation of WF_GRAPH along NEXT_PLANE is proved in tame_wf_inv.ml.    *)
+(* preservation of WF_GRAPH along NEXT_PLANE is proved in tg_wf_inv.hl.      *)
 (* ========================================================================= *)
 
 flyspeck_needs "graph/tg_check.hl";;

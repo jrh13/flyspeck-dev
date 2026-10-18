@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_eval_support.ml                                                 *)
+(* graph/tg_eval_support.hl                                                  *)
 (*                                                                           *)
 (* Support for the proof-producing evaluator: numerals in the base-100       *)
 (* representation of HOL Light's Formal_ineqs natural-number library         *)

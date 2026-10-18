@@ -1,9 +1,9 @@
 (* ========================================================================= *)
-(* tame/tame_bridge_main.ml -- Flyspeck's hypothesis import_tame_            *)
-(* classification (hales_archive.ml) follows from the four class runs        *)
-(* (CLASSIFICATION_FROM_FOUR_RUNS, tame_main.ml) through the bridge          *)
-(* theorems, given that Flyspeck's archive is our ARCHIVE (the equality of   *)
-(* the two archive constants is computed in tame_bridge_archive.ml).         *)
+(* graph/tg_bridge_main.hl -- Flyspeck's hypothesis import_tame_             *)
+(* classification (tg_archive_bridge.hl) follows from the four class runs    *)
+(* (CLASSIFICATION_FROM_FOUR_RUNS, tg_main.hl) through the bridge theorems,  *)
+(* given that Flyspeck's archive is our ARCHIVE (the equality of the two     *)
+(* archive constants is computed in tg_bridge_archive.hl).                   *)
 (* ========================================================================= *)
 
 flyspeck_needs "graph/tg_main.hl";;

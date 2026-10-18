@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_sound.ml                                                        *)
+(* graph/tg_sound.hl                                                         *)
 (*                                                                           *)
 (* The goal predicate of the search tree and the soundness lemmas the HOL    *)
 (* driver composes: TFO arch p g says every tame final graph reachable from  *)
@@ -7,8 +7,8 @@
 (* arch.  The node lemma (TFO_NODE) is the induction step; the pruning       *)
 (* justify dropping successors (vertex count, degree, lower bound, untame    *)
 (* final graphs) and the whole polygon-size families; ISO_CERT_SOUND accepts *)
-(* a final graph (tame_isothm.ml).  The pruning lemmas themselves are proved *)
-(* in tame_mono.ml (vertex count, degree) and tame_lbthm.ml (lower bound).   *)
+(* a final graph (tg_isothm.hl).  The pruning lemmas themselves are proved   *)
+(* in tg_mono.hl (vertex count, degree) and tg_lbthm.hl (lower bound).       *)
 (* ========================================================================= *)
 
 flyspeck_needs "graph/tg_check.hl";;

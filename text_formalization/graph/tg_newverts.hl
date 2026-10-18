@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_newverts.ml                                                     *)
+(* graph/tg_newverts.hl                                                      *)
 (*                                                                           *)
 (* The vertex count of a subdivided graph is the parent's count plus the     *)
 (* number of new vertices determined by the vertex option list alone         *)
@@ -102,7 +102,7 @@ let TFO_VCOUNT_PRUNED_VL = prove
 
 (* ------------------------------------------------------------------------- *)
 (* The well-formedness check on the chosen face that the polygon-size        *)
-(* pruning lemma TFO_SIZE_CHECKED (tame_lbthm.ml) needs.                     *)
+(* pruning lemma TFO_SIZE_CHECKED (tg_lbthm.hl) needs.                       *)
 (* ------------------------------------------------------------------------- *)
 
 let MINFACE_WF = new_definition

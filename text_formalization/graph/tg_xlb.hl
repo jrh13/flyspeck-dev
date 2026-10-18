@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_xlb.ml -- the stronger lower bound ("completion excess").       *)
+(* graph/tg_xlb.hl -- the stronger lower bound ("completion excess").        *)
 (*                                                                           *)
 (* Nipkow's bound charges the squander of the final faces and the excess of  *)
 (* final vertices.  Here EVERY vertex v may be charged: in any tame final    *)
@@ -10,7 +10,7 @@
 (* exceptional face forcing type (5,0,1)) of the weight the faces at v must  *)
 (* carry; XEXCESS subtracts the squander already counted for v's final      *)
 (* faces.  Separation: no small (<= 4) or non-final face at v contains      *)
-(* another chosen vertex.  Soundness: tame_xlbthm.ml; the native generator   *)
+(* another chosen vertex.  Soundness: tg_xlbthm.hl; the native generator     *)
 (* (measure/lbvar_defs.ml variant 2) uses the same numbers.                  *)
 (* ========================================================================= *)
 

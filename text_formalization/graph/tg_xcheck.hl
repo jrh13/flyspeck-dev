@@ -1,6 +1,6 @@
 (* ========================================================================= *)
-(* tame/tame_xcheck.ml -- executable forms of the stronger lower bound       *)
-(* (tame_xlb.ml) for the evaluator: the minimum over the final types with   *)
+(* graph/tg_xcheck.hl -- executable forms of the stronger lower bound        *)
+(* (tg_xlb.hl) for the evaluator: the minimum over the final types with     *)
 (* no exceptional face depends only on (t, q, nf) and is memoised as CV0;   *)
 (* XEXCESS without let.                                                      *)
 (* ========================================================================= *)

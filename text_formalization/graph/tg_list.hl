@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_list.ml                                                         *)
+(* graph/tg_list.hl                                                          *)
 (*                                                                           *)
 (* List helpers of the tame-graph enumeration (Isabelle ListAux.thy and the  *)
 (* HOL List.thy functions it uses that have no HOL Light core counterpart):  *)

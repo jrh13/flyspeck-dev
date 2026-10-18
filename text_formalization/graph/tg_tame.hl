@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_tame.ml                                                         *)
+(* graph/tg_tame.hl                                                          *)
 (*                                                                           *)
 (* Tameness of plane graphs (Isabelle Tame.thy): the squander constants      *)
 (* SQUANDER_TARGET, EXCESS_T_COUNT (a), SQUANDER_VERTEX (b), SQUANDER_FACE   *)

@@ -1,10 +1,10 @@
 (* ========================================================================= *)
-(* tame/tame_bridge_archive.ml -- our ARCHIVE is Flyspeck's                  *)
+(* graph/tg_bridge_archive.hl -- our ARCHIVE is Flyspeck's                   *)
 (* tame_archive_lists: the chunked constant is converted to the evaluator's  *)
 (* numerals (the same base-200 Arith_num digits, no NUMERAL wrapper, that    *)
 (* Flyspeck's good_list_archive.hl uses), flattened by rewriting with the    *)
 (* FLAT and APPEND clauses and compared syntactically with the replica of    *)
-(* Flyspeck's constant (hales_archive.ml).                                   *)
+(* Flyspeck's constant (tg_archive_bridge.hl).                               *)
 (* ========================================================================= *)
 
 flyspeck_needs "graph/tg_eval_support.hl";;

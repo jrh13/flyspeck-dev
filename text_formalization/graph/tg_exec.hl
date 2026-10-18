@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_exec.ml                                                         *)
+(* graph/tg_exec.hl                                                          *)
 (*                                                                           *)
 (* Executable clause forms of the specification functions, for the           *)
 (* proof-producing evaluator (compute-hol-light eval_compile): recursion on  *)

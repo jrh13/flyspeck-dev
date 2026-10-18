@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_enum_fast.ml -- faster executable form of POLY_VLISTS.          *)
+(* graph/tg_enum_fast.hl -- faster executable form of POLY_VLISTS.           *)
 (*                                                                           *)
 (* The vertex of index k around the face from v is EL k of the rotation of   *)
 (* the vertex list starting at v (INDEX_TO_VERTEX_LIST walks NEXT_VERTEX k   *)

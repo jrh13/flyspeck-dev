@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_xstats.ml -- one pass over the faces at a vertex for the five   *)
+(* graph/tg_xstats.hl -- one pass over the faces at a vertex for the five    *)
 (* numbers behind XEXCESS (TRI, QUAD, EXCEPT, NF_AT and SF_SUM each scan     *)
 (* FACES_AT g v separately; XSTATS computes them together).                  *)
 (* ========================================================================= *)
@@ -93,7 +93,7 @@ let XEXCESS_XSTATS = prove
 
 (* ------------------------------------------------------------------------- *)
 (* Evaluation form of the step: the face size is tested by the shape of the  *)
-(* vertex list (IS_LEN3, IS_LEN4, IS_LEN_GE5 of tame_exec.ml), the quad      *)
+(* vertex list (IS_LEN3, IS_LEN4, IS_LEN_GE5 of tg_exec.hl), the quad        *)
 (* squander 2058 = SQUANDER_FACE 4 is a literal, and LENGTH (VERTICES f) is  *)
 (* computed only once, for the squander of a face with 5 or more vertices    *)
 (* (or, degenerately, fewer than 3: SQUANDER_FACE then gives the target).    *)

@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_check.ml                                                        *)
+(* graph/tg_check.hl                                                         *)
 (*                                                                           *)
 (* The checks evaluated at the nodes of the certificate-driven search tree:  *)
 (* the lower bound LB_S g cs from a certificate list cs of final vertices    *)
@@ -8,7 +8,7 @@
 (* degree pruning test, the executable (ALL-quantified) forms of the         *)
 (* tameness conditions on final graphs, the length invariant of the face     *)
 (* list table and the isomorphism certificate.  Soundness theorems are in    *)
-(* tame_sound.ml (interface) and the proof files.                            *)
+(* tg_sound.hl (interface) and the proof files.                              *)
 (* ========================================================================= *)
 
 

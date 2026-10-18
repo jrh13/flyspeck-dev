@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_mono.ml                                                         *)
+(* graph/tg_mono.hl                                                          *)
 (*                                                                           *)
 (* Monotonicity along the enumeration.  A NEXT_PLANE successor arises from   *)
 (* the graph by a sequence of refinement STEPs: splitting a nonfinal face    *)
@@ -9,7 +9,7 @@
 (* vertex, and never removes a final face from, nor shortens, the face list  *)
 (* of any existing vertex.  Lifted along REACH these give the pruning        *)
 (* lemmas TFO_VCOUNT and TFO_DEGREE and the facts the lower-bound theorem    *)
-(* needs (tame_lbthm.ml).                                                    *)
+(* needs (tg_lbthm.hl).                                                      *)
 (*                                                                           *)
 (* Proof route: the face table of a split is the old one transformed by four *)
 (* MAP_AT (REPLACE oldF ys) passes and extended with new rows; a relation R  *)
@@ -407,7 +407,7 @@ let REACH_DEGREE_EXCEPT = prove
   MESON_TAC[LENGTH_FILTER_SUBMSET]);;
 
 (* ------------------------------------------------------------------------- *)
-(* The pruning lemmas of tame_sound.ml follow.                               *)
+(* The pruning lemmas of tg_sound.hl follow.                                 *)
 (* ------------------------------------------------------------------------- *)
 
 let FACE_LIST_LEN_NEXT_PLANE_PROVED = prove

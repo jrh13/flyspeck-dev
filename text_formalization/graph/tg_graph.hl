@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_graph.ml                                                        *)
+(* graph/tg_graph.hl                                                         *)
 (*                                                                           *)
 (* Faces and plane graphs as in Isabelle Graph.thy (Bauer/Nipkow): the      *)
 (* types facetype, face, graph, their projections, the seed graph, finality, *)

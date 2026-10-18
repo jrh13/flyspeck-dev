@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_leaf.ml -- pruned children without construction.  For vl in    *)
+(* graph/tg_leaf.hl -- pruned children without construction.  For vl in     *)
 (* POLY_VLISTS i v f g the child SUBDIV_FACE g f vl is described locally:    *)
 (* its faces are the faces of g other than f, one non-final piece per        *)
 (* non-trivial arc between consecutive chosen vertices (the arc of f, the    *)
@@ -21,8 +21,8 @@
 (* (the polygon, the pieces in ALL2 correspondence with the non-trivial      *)
 (* arcs, the face lists of the child).  The step lemmas ANAT_STATE_NONE,     *)
 (* ANAT_STATE_TRIVIAL, ANAT_STATE_SPLIT and the base case ANAT_FINAL use     *)
-(* SUBDIV_SPLIT_STEP (tame_subdiv_inv.ml) and the face-list facts of         *)
-(* tame_split_inv.ml.  The arcs (ARCS_REC) are described by their own        *)
+(* SUBDIV_SPLIT_STEP (tg_subdiv_inv.hl) and the face-list facts of           *)
+(* tg_split_inv.hl.  The arcs (ARCS_REC) are described by their own          *)
 (* induction (ARCS_REC_ARC_PROPS, ARCS_REC_COUNTS) with ARC_COUNT, the       *)
 (* number of non-trivial arcs whose ARC_VERTS contain a vertex.  The counts  *)
 (* follow from XSTATS of a duplicate-free list with known members            *)
@@ -636,7 +636,7 @@ let ARCS_REC_COUNTS = prove
 
 (* ------------------------------------------------------------------------- *)
 (* The vertex option lists of POLY_VLISTS: CONS (SOME v) vos of length i     *)
-(* with vos well formed (SUBDIV_OPTS of tame_lbthm.ml) relative to the       *)
+(* with vos well formed (SUBDIV_OPTS of tg_lbthm.hl) relative to the         *)
 (* vertices of f after v.                                                    *)
 (* ------------------------------------------------------------------------- *)
 
@@ -693,7 +693,7 @@ let POLY_VLISTS_STRUCTURE = prove
 (* original vertices, D processed chosen and new vertices), the faces of g   *)
 (* are the old faces other than f0, the pieces of the processed non-trivial  *)
 (* arcs A and f, the face list of every vertex is the corresponding          *)
-(* selection, and the chord conditions of tame_subdiv_inv.ml.  ANAT_RESULT  *)
+(* selection, and the chord conditions of tg_subdiv_inv.hl.  ANAT_RESULT    *)
 (* describes the final graph: the polygon with vertex set pv and len         *)
 (* vertices, the pieces of the non-trivial arcs of arcs, the face lists.     *)
 (* ------------------------------------------------------------------------- *)
@@ -1485,7 +1485,7 @@ let POLY_VLISTS_NEW_COUNT = prove
   MP_TAC(SPEC `vos:(num option)list` LENGTH_SOMES_LE) THEN ARITH_TAC);;
 
 (* ------------------------------------------------------------------------- *)
-(* The anatomy of the child (the statements of pkg/tame_leaf.ml).            *)
+(* The anatomy of the child (the statements of pkg/tg_leaf.hl).              *)
 (* ------------------------------------------------------------------------- *)
 
 let SUBDIV_FACE_COUNT_VERTICES_LEAF = prove

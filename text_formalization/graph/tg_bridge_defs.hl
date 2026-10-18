@@ -1,10 +1,10 @@
 (* ========================================================================= *)
-(* tame/tame_bridge_defs.ml -- the representation maps between our graph     *)
-(* datatype (tame_graph.ml) and Hales' tuple representation (hales_defs.ml): *)
-(* a face (FACE vs t) becomes the pair (vs, t = Final), a graph              *)
-(* (GRAPH fs n fss h) becomes the tuple (fs, n, fss, h) with the faces       *)
-(* mapped.  HFACE/HGRAPH go to Hales' side, OFACE/OGRAPH come back; they are *)
-(* mutually inverse bijections (tame_bridge_graph.ml).                       *)
+(* graph/tg_bridge_defs.hl -- the representation maps between our graph      *)
+(* datatype (tg_graph.hl) and Hales' tuple representation                    *)
+(* (tg_hales_alias.hl): a face (FACE vs t) becomes the pair (vs, t = Final), *)
+(* a graph (GRAPH fs n fss h) becomes the tuple (fs, n, fss, h) with the     *)
+(* faces mapped.  HFACE/HGRAPH go to Hales' side, OFACE/OGRAPH come back;    *)
+(* they are mutually inverse bijections (tg_bridge_graph.hl).                *)
 (* ========================================================================= *)
 
 flyspeck_needs "graph/tg_wf.hl";;

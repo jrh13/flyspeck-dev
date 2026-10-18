@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_iso.ml                                                          *)
+(* graph/tg_iso.hl                                                           *)
 (*                                                                           *)
 (* Face graphs and their isomorphism (Isabelle PlaneGraphIso.thy, as         *)
 (* transcribed by Hales in Flyspeck's import_tame_classification.hl): FGRAPH *)

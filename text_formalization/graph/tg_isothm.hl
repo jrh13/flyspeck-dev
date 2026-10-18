@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_isothm.ml                                                       *)
+(* graph/tg_isothm.hl                                                        *)
 (*                                                                           *)
 (* Soundness of the isomorphism certificate: ISO_CERT_OK fs1 fs2 c implies   *)
 (* ISO_FGRAPH fs1 fs2 (Hales' / Isabelle's notion).  The certificate's       *)
@@ -8,7 +8,7 @@
 (* the congruence classes of MAP phi applied to fs1 and of fs2 (possibly     *)
 (* with every face reversed) as the same set.  The witness for ISO_FGRAPH    *)
 (* is APPLY_MAP phi; ISO_CERT_SOUND_PROVED replaces ISO_CERT_SOUND of        *)
-(* tame_sound.ml.                                                            *)
+(* tg_sound.hl.                                                              *)
 (* ========================================================================= *)
 
 

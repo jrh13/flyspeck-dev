@@ -1,10 +1,10 @@
 (* ========================================================================= *)
-(* tame/tame_split_inv.ml -- GRAPH_INV (tame_inv.ml) is preserved by one    *)
+(* graph/tg_split_inv.hl -- GRAPH_INV (tg_inv.hl) is preserved by one       *)
 (* SPLIT_FACE (under the conditions the enumeration guarantees: distinct     *)
 (* vertices a, b of a non-final face f, fresh new vertices, and for a split  *)
 (* without new vertices a and b neither adjacent on f nor already joined by  *)
 (* an edge) and by MAKE_FACE_FINAL; with the structural facts about the      *)
-(* result that the induction over the vertex list (tame_subdiv_inv.ml)      *)
+(* result that the induction over the vertex list (tg_subdiv_inv.hl)        *)
 (* needs.  Proved version (agent split); statements as in the skeleton,     *)
 (* except SPLIT_FACE_PIECES whose third conjunct needs MEM f (FACES g).      *)
 (*                                                                           *)
@@ -15,7 +15,7 @@
 (* a new vertex is [f1;f2] (_NEW).  The pieces are new faces: for k > 0      *)
 (* they contain a new vertex, for k = 0 a piece shares an edge with f, so by *)
 (* EDGES_UNIQUE it would be f, forcing an arc to be empty, i.e. a and b to   *)
-(* be adjacent.  The edge facts come from tame_arcs.ml.                      *)
+(* be adjacent.  The edge facts come from tg_arcs.hl.                        *)
 (* ========================================================================= *)
 
 
@@ -114,7 +114,7 @@ let DISTINCT_REVERSE = prove
 
 (* ------------------------------------------------------------------------- *)
 (* The new vertices, the parts of GRAPH_INV as separate facts, and the       *)
-(* hypotheses of the arc lemmas of tame_arcs.ml for nv = NEW_VS g k.         *)
+(* hypotheses of the arc lemmas of tg_arcs.hl for nv = NEW_VS g k.           *)
 (* ------------------------------------------------------------------------- *)
 
 let NEW_VS_PROPS = prove

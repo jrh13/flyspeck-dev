@@ -1,10 +1,10 @@
 (* ========================================================================= *)
-(* tame/tame_eval_db.ml                                                      *)
+(* graph/tg_eval_db.hl                                                       *)
 (*                                                                           *)
 (* The rule database of the proof-producing evaluator: every function on the *)
-(* evaluation path with its executable clause theorem (tame_exec.ml,         *)
-(* tame_check.ml and the specification files), the numeral arithmetic rules  *)
-(* of tame_eval_support.ml and the equality rules.  tame_db builds the       *)
+(* evaluation path with its executable clause theorem (tg_exec.hl,           *)
+(* tg_check.hl and the specification files), the numeral arithmetic rules    *)
+(* of tg_eval_support.hl and the equality rules.  tame_db builds the         *)
 (* database and the dependency groups for a result term; the generated OCaml *)
 (* evaluator is written by write_rules_consts.  Requires compute-hol-light's *)
 (* eval_compile.hl on the load path.                                         *)
@@ -72,7 +72,7 @@ let LEAF_SEP_OLD_EXEC = prove
   REPEAT GEN_TAC THEN REWRITE_TAC[LEAF_SEP_OLD] THEN
   COND_CASES_TAC THEN ASM_REWRITE_TAC[]);;
 
-(* the evaluator's rule for XEXCESS_OF (tame_xstats.ml): no LET, no bare    *)
+(* the evaluator's rule for XEXCESS_OF (tg_xstats.hl): no LET, no bare      *)
 (* constant SQUANDER_TARGET                                                  *)
 let XEXCESS_OF_EXEC =
   REWRITE_RULE[SQUANDER_TARGET]
@@ -233,7 +233,7 @@ let tame_rules = [
   "FACE_MATCH_BACK", FACE_MATCH_BACK, [];
   "ISO_CERT_OK_EXEC", ISO_CERT_OK_EXEC, [];
   "ALL2", ALL2, [];
-  (* the stronger lower bound (tame_xlb.ml, tame_xcheck.ml) *)
+  (* the stronger lower bound (tg_xlb.hl, tg_xcheck.hl)     *)
   "NF_AT", NF_AT, [];
   "SF_SUM", SF_SUM, [];
   "CV0_EXEC", CV0_EXEC, [];

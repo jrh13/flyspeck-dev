@@ -1,5 +1,5 @@
 (* ========================================================================= *)
-(* tame/tame_enum.ml                                                         *)
+(* graph/tg_enum.hl                                                          *)
 (*                                                                           *)
 (* The plane-graph enumeration of Isabelle Enumerator.thy, FaceDivision.thy, *)
 (* Plane.thy and Plane1.thy: index-list enumeration (ENUMERATOR), face       *)
