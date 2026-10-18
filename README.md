@@ -50,6 +50,8 @@ The directory structure for the flyspeck project is as follows.
   the code for the formal verification of the classification  of tame graphs.  
   The files here are solely to aid in 
   the translation of the statement of the theorem into HOL Light.
+  The classification is now also verified in HOL Light itself, in
+  [`text_formalization/graph`](text_formalization/graph).
 
 [`formal_lp`](formal_lp)
   Files related to the formal verification on linear programs.
@@ -57,6 +59,11 @@ The directory structure for the flyspeck project is as follows.
   certificates themselves are kept in
   [`formal_lp/glpk/binary`](formal_lp/glpk/binary), so verifying the linear
   programs needs neither.
+
+[`graph_native`](graph_native)
+  The generator of the per-node certificates from which
+  [`text_formalization/graph`](text_formalization/graph) verifies the
+  classification of tame graphs (pure OCaml, no HOL Light).
 
 [`informal_code`](informal_code)
   Code used for the informal computer programs used in the proof of the Kepler conjecture.
@@ -73,6 +80,11 @@ The directory structure for the flyspeck project is as follows.
   for more instructions on loading and auditing the project.
 
   [`text_formalization/build`](text_formalization/build) directory contains files related to building the project.
+
+  [`text_formalization/graph`](text_formalization/graph) verifies the
+  classification of tame graphs in HOL Light by certificate-checked
+  enumeration, from which the build composes the hypothesis
+  `import_tame_classification` of the main theorem; see the README there.
 
 ## Thanks
 
