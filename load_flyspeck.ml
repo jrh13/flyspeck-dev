@@ -85,3 +85,18 @@ build_to_full "general/the_kepler_conjecture.hl";;
 (*
 map flyspeck_needs Build.build_sequence_full;;
 *)
+
+(* With the graph/ chapter the classification of tame graphs is verified in
+   HOL Light too.  Start with FLYSPECK_SERIALIZATION=1 in the environment (as
+   for the nonlinear inequalities) and load the sequence below.  Then
+   Tg_kepler_complete.the_kepler_conjecture () is
+
+     |- the_kepler_conjecture
+
+   with no hypotheses, resting on HOL Light's three axioms, deserialization
+   (the nonlinear inequalities) and graph_deserialization (the four classes
+   of tame graphs, imported against their digests in the same way).  See
+   text_formalization/graph/README.md. *)
+(*
+map flyspeck_needs Build.build_sequence_graph_kepler;;
+*)
