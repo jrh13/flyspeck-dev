@@ -93,6 +93,10 @@ working on terms built with a different numeral representation.)
   digest matches; the composition with the real Tri theorem and the other
   three classes imported gives `|- import_tame_classification`, resting on
   `graph_deserialization` and HOL Light's three axioms and nothing else.
+- End to end in a full Flyspeck session: Tri proved there, the other three
+  imported, `|- import_tame_classification`, and with
+  `nonlinear/mk_all_ineq.hl` `|- the_kepler_conjecture` (axioms:
+  `deserialization`, `graph_deserialization`, HOL Light's three).
 - All four classes inside Flyspeck sessions would need each class split into
   tasks (the `top` / `sub` modes above) across parallel sessions, with the
   task theorems imported as the class theorems are now.  Not done.

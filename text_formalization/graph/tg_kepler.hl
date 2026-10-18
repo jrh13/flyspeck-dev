@@ -1,0 +1,33 @@
+(* ========================================================================= *)
+(* graph/tg_kepler.hl -- the Kepler conjecture without the external tame     *)
+(* classification.                                                           *)
+(*                                                                           *)
+(* Flyspeck's final composition (general/the_kepler_conjecture.hl),          *)
+(*   tame_nonlinear_imp_kepler_conjecture :                                  *)
+(*     |- import_tame_classification /\ the_nonlinear_inequalities           *)
+(*        ==> the_kepler_conjecture,                                         *)
+(* takes the classification of tame graphs (proved in Isabelle) as a         *)
+(* hypothesis.  With graph_classification () supplying                       *)
+(* |- import_tame_classification it becomes                                  *)
+(*   |- the_nonlinear_inequalities ==> the_kepler_conjecture,                *)
+(* and with nonlinear/mk_all_ineq.hl supplying |- the_nonlinear_inequalities *)
+(* (graph/tg_kepler_complete.hl) the Kepler conjecture itself.               *)
+(* ========================================================================= *)
+
+flyspeck_needs "general/the_kepler_conjecture.hl";;
+flyspeck_needs "graph/tg_classification.hl";;
+
+prioritize_num();;
+
+module Tg_kepler = struct
+
+(* |- the_nonlinear_inequalities ==> the_kepler_conjecture, resting on       *)
+(* whatever the installed class-theorem source rests on                      *)
+let nonlinear_imp_kepler_conjecture () =
+  let th = The_kepler_conjecture.tame_nonlinear_imp_kepler_conjecture in
+  let tc = Tg_classification.graph_classification () in
+  let nl = `the_nonlinear_inequalities` in
+  let ant = fst (dest_imp (concl th)) in
+  DISCH nl (MP th (EQT_ELIM (REWRITE_CONV [tc; ASSUME nl] ant)));;
+
+end;;

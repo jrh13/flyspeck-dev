@@ -1,0 +1,27 @@
+(* ========================================================================= *)
+(* graph/tg_kepler_complete.hl -- |- the_kepler_conjecture.                 *)
+(*                                                                           *)
+(* Combines Tg_kepler.nonlinear_imp_kepler_conjecture with Flyspeck's        *)
+(* serialized nonlinear inequalities (nonlinear/mk_all_ineq.hl).  That file  *)
+(* needs Flyspeck's serialization switched on before                         *)
+(* general/serialization.hl is loaded (FLYSPECK_SERIALIZATION=1 in the       *)
+(* environment, as for                                                       *)
+(* Build.build_sequence_the_nonlinear_inequalities) or, if it is already     *)
+(* loaded, Serialization.use_serialization := true.  The theorem rests on    *)
+(* Flyspeck's deserialization axiom (the nonlinear inequalities) and on the  *)
+(* class-theorem source of the graph chapter (graph_deserialization when the *)
+(* four class theorems are imported, see graph/tg_graph_import.hl).          *)
+(* ========================================================================= *)
+
+flyspeck_needs "nonlinear/mk_all_ineq.hl";;
+flyspeck_needs "graph/tg_kepler.hl";;
+
+prioritize_num();;
+
+module Tg_kepler_complete = struct
+
+let the_kepler_conjecture () =
+  MP (Tg_kepler.nonlinear_imp_kepler_conjecture ())
+     Mk_all_ineq.the_nonlinear_inequalities;;
+
+end;;

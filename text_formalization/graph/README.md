@@ -9,8 +9,10 @@ OCaml generator (`../../graph_native`); the chapter composes
     |- import_tame_classification
 
 from four class theorems `TFO ARCHIVE p (SEED p)` (p = 0..3: Tri, Quad,
-Pent, Hex) and the archive equality.  The development was done as a
-standalone package and ported here.
+Pent, Hex) and the archive equality, and with Flyspeck's serialized
+nonlinear inequalities the Kepler conjecture itself,
+`|- the_kepler_conjecture`, without the Isabelle hypothesis.  The
+development was done as a standalone package and ported here.
 
 ## Contents
 
@@ -40,19 +42,31 @@ standalone package and ported here.
   is installed with `Tg_classification.set_class_theorems`.
 - `tg_graph_import.hl`: the serialization import of the class theorems
   (below).
+- `tg_kepler.hl`: Flyspeck's final composition
+  (`The_kepler_conjecture.tame_nonlinear_imp_kepler_conjecture`) with
+  `graph_classification ()`, giving
+  `|- the_nonlinear_inequalities ==> the_kepler_conjecture`.
+- `tg_kepler_complete.hl`: with Flyspeck's serialized nonlinear inequalities
+  (`nonlinear/mk_all_ineq.hl`), `|- the_kepler_conjecture`.
 
 ## Build
 
-`build/build.hl` defines three sequences (none is part of the default
+`build/build.hl` defines four sequences (none is part of the default
 build).  Each loads Flyspeck through `general/the_kepler_conjecture.hl` and
 `general/serialization.hl` (everything before `nonlinear/mk_all_ineq.hl`),
 then:
 
-- `Build.build_sequence_graph`: the composition layer.  No class-theorem
-  source is installed, so `graph_classification ()` says that one is needed.
+- `Build.build_sequence_graph`: the composition layer and `tg_kepler.hl`.
+  No class-theorem source is installed, so `graph_classification ()` says
+  that one is needed.
 - `Build.build_sequence_graph_serial`: also `general/theorem_graph_digest.hl`
   and `graph/tg_graph_import.hl`, which installs the import, so that
   `graph_classification ()` returns `|- import_tame_classification`.
+- `Build.build_sequence_graph_kepler`: also `nonlinear/mk_all_ineq.hl` and
+  `tg_kepler_complete.hl`; `Tg_kepler_complete.the_kepler_conjecture ()` is
+  `|- the_kepler_conjecture`.  As for Flyspeck's
+  `build_sequence_the_nonlinear_inequalities`, set `FLYSPECK_SERIALIZATION=1`
+  before loading Flyspeck.
 - `Build.build_sequence_graph_prove`: the composition layer and the
   executable layer, so that the session can prove class theorems itself:
 
@@ -91,6 +105,18 @@ statements read off `IMPORT_TAME_CLASSIFICATION_FROM_RUNS`.  A class proved
 in the same session can be installed directly instead, without the axiom.
 
 ## Verified
+
+- End to end, in a Flyspeck session holding everything up to and including
+  `general/serialization.hl` (no stand-in definitions): the whole chapter
+  loads (11.5 min); `Tg_driver.run_class 0` proves Tri (10 min) and its
+  digest is the frozen one; `graph_classification ()`, with Tri proved and
+  the other three classes imported, is `|- import_tame_classification`;
+  `Tg_kepler.nonlinear_imp_kepler_conjecture ()` is
+  `|- the_nonlinear_inequalities ==> the_kepler_conjecture`; and with
+  `nonlinear/mk_all_ineq.hl` (15 min) `Tg_kepler_complete.the_kepler_conjecture
+  ()` is `|- the_kepler_conjecture`, with no hypotheses, resting on the
+  axioms `deserialization` (Flyspeck's, for the nonlinear inequalities),
+  `graph_deserialization` and HOL Light's three, and nothing else.
 
 - In a Flyspeck session (Flyspeck through tame/good_list_archive.hl with
   Multivariate and ssreflect, plus verbatim copies of the
