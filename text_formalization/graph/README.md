@@ -100,6 +100,9 @@ in the same session can be installed directly instead, without the axiom.
   that theorem with the other three classes imported is
   `|- import_tame_classification`, resting on `graph_deserialization` and
   HOL Light's three axioms and nothing else.
-- In a full Flyspeck build through the_kepler_conjecture.hl, the 21 bridge and
-  specification files load against the real definitions (a later run checks
-  `Build.build_sequence_graph_serial` end to end).
+- A full Flyspeck build of `Build.build_sequence_graph_serial` (4 h 38 min,
+  almost all of it Flyspeck's own linear-programming verification) loads
+  the composition layer and the import against the real
+  the_kepler_conjecture.hl definitions, and `graph_classification ()`
+  returns `|- import_tame_classification` with no hypotheses, resting on
+  `graph_deserialization` and HOL Light's three axioms and nothing else.
