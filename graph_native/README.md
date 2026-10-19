@@ -1,11 +1,12 @@
-# graph_native -- certificate generation for the graph chapter
+# graph_native -- certificates and native runners for the graph chapter
 
 The tame enumeration is checked in the `graph/` HOL Light chapter against
 per-node certificates: for every node of the enumeration tree, which rule
 disposes of it (a child, a pruning bound with its witness, an archive match
 with its isomorphism, ...).  This directory contains the generator of those
-certificates.  The checking -- the proofs -- happens in HOL Light, by the
-chapter's driver.
+certificates (pure OCaml), and native HOL Light runners that prove the four
+class theorems from them outside a Flyspeck session, with or without OCaml
+domains.  The proofs are those of the chapter's driver.
 
 ## The certificate generator
 
@@ -21,30 +22,95 @@ and prints the certificate of a class or of part of one:
 
 P is 0..3 (Tri, Quad, Pent, Hex).  The certificate uses the stronger
 "completion excess" lower bound with minimal witnesses; its format and the
-generator's internals are in `certgen_core.ml`.  `./certgen 0` (6 s) prints
-the Tri certificate the in-session proof below uses, byte for byte (29,690
-lines, 501 archive matches), from Flyspeck's own archive data.
+generator's internals are in `certgen_core.ml`.  `./certgen P` builds the
+whole certificate in memory on one core, which is fine for Tri (6 s), Quad
+(7 min) and Hex (25 min).  For Pent (32.7 million lines, 1.5 GB) use the
+split modes in parallel:
+
+    ./gen_split.sh P D JOBS OUTFILE  same result: top part to depth D,
+                                     subtrees as JOBS parallel processes,
+                                     assembled by cert_assemble.py
+
+On a 32-core machine `./gen_split.sh 2 4 28 cert2.txt` takes 49 min, against
+3 h 29 min for `./certgen 2`; both give the same file.
 
 ## Proving the class theorems
 
 The driver `Tg_driver.run_class p certfile` (graph/tg_driver.hl) reads a
 certificate and proves `|- TFO ARCHIVE p (SEED p)`, re-checking every step by
-proof-producing evaluation.  It runs in two settings:
+proof-producing evaluation.  It runs in a Flyspeck session or in the native
+runners below.
 
-- In a Flyspeck session: load `Build.build_sequence_graph_prove` (Flyspeck,
-  then the whole chapter), then
+### In a Flyspeck session
 
-      Tg_driver.xlb_mode := true;;
-      let th0 = Tg_driver.run_class 0 "cert0.txt";;
+Load `Build.build_sequence_graph_prove` (Flyspeck, then the whole chapter),
+then
 
-  Measured for Tri: 12 min for 29,690 nodes (24.7 ms per node).  At that rate
-  Quad (1.05 million nodes) takes about 7 h, Pent (32.7 million) about 9
-  days and Hex (9.0 million) about 2.6 days in one serial session.
-- Natively: the standalone development from which `graph/` is generated,
-  compiled with OCaml 5 and HOL Light's module build, runs the same driver on
-  32 domains.  It proves all four classes and `|- import_tame_classification`
-  in one process in 1 h 32 min (Tri 33 s, Quad 3.2 min, Pent 64 min, Hex 22
-  min).  That runner is not part of this repository.
+    Tg_driver.xlb_mode := true;;
+    let th0 = Tg_driver.run_class 0 "cert0.txt";;
+
+Measured for Tri: 10 to 12 min for 29,690 nodes.  At that rate Quad (1.05
+million nodes) takes about 7 h, Pent (32.7 million) about 9 days and Hex
+(9.0 million) about 2.6 days in one serial session.
+
+### The native runners
+
+`runner/` builds native HOL Light programs from the chapter's own files, the
+way `azure/` builds its verifier: `hol.sh inline-load` folds the files into
+one program, `hol.sh compile` and `hol.sh link` build it against a HOL Light
+made with `HOLLIGHT_USE_MODULE=1`, with that HOL Light's OCaml environment
+active.
+
+    ulimit -s unlimited
+    make certgen certsplit
+    make graph_runner HOLLIGHT_DIR=/path/to/hol-light          # OCaml >= 4.14
+    make graph_runner_domains HOLLIGHT_DIR=/path/to/hol-light  # OCaml 5
+    ./certgen P > certP.txt
+    ./certsplit certP.txt T > planP.txt    # T = 100, 3000, 60000, 20000
+
+The plan cuts the certificate into a top part and tasks, the maximal subtrees
+with at most T nodes.  The modes:
+
+- `graph_runner serial P CERT`: the whole class in one process.
+- `graph_runner task P CERT PLAN K I`: worker I of K, a separate
+  single-threaded process; it proves every K-th task, largest first, and
+  prints the digest of each task theorem.
+- `graph_runner assemble P CERT PLAN FILE...`: proves the class theorem with
+  one hypothesis per task statement, and checks that each hypothesis is the
+  statement whose digest a worker printed.  No axiom is involved: the
+  hypotheses are exactly the statements the workers proved.
+- `runner/run_tasks.sh P CERT PLAN K OUTDIR`: runs K workers in parallel,
+  then assembles.  The workers share nothing, so they could equally run on
+  other machines or one after another.
+- `graph_runner_domains domains P CERT PLAN NDOM`: one process, NDOM worker
+  domains (OCaml 5).
+
+Each mode prints `CLASS_THM P |- TFO ARCHIVE P (SEED P)` with its number of
+hypotheses: none for serial and domains, one per task for assemble.
+
+In the domains mode the workers make no definitions; all are made at load
+time, including the evaluator's lambda-lifted abstractions.  They only apply
+inference rules and read the kernel's tables.  They share an archive cache
+filled before they start, atomic counters and the evaluator's memo; a race
+there could only make a task fail, since every step is kernel-checked and
+each task theorem is compared with its statement before use.  The
+multi-process route avoids the question altogether.
+
+Measured on a 32-core machine, with the certificates already generated:
+
+| class | tasks | 30 worker processes, OCaml 4.14 | 30 domains, OCaml 5 |
+|---|---|---|---|
+| Tri  |  1,507 |  3.8 min |  2.1 min |
+| Quad |  6,325 |  7.2 min |  4.8 min |
+| Pent | 29,578 | 79.5 min | 65.4 min |
+| Hex  | 31,162 | 29.3 min | 23.6 min |
+| all  |        |  2.0 h   |  1.6 h   |
+
+The times are wall-clock and include each process's start-up of about 90 s,
+in which the native program re-runs the chapter's proofs.  Peak memory was
+1.9 GB per worker process and 4.4 GB for the domains process.  The serial
+mode proves Tri in 100 s; for all four classes it needs about 40 hours,
+estimated from the domains run.
 
 ## Getting the class theorems into the Flyspeck build
 
@@ -82,21 +148,22 @@ statements, and the import can only produce the four statements it reads off
 The digests are computed in a Flyspeck session by
 `Tg_graph_import.class_digest`, the function the import checks with.  For
 Tri the session also proved the theorem itself (above) and its digest is the
-frozen one.  (The standalone native build's own serializer prints a
-different hex for the same statement: it is a different copy of the code,
-working on terms built with a different numeral representation.)
+frozen one.  The native runners have their own digest, `term_digest` in
+`runner/runner_lib.hl`, used only to match task theorems between their own
+processes; it is not the one the import checks.
 
 ## Status
 
-- `certgen`: builds; `./certgen 0` reproduces the Tri certificate.
+- `certgen` reproduces byte for byte the certificates of all four classes
+  used here, Pent both serially and with `gen_split.sh`.
+- `graph_runner`, built against OCaml 4.14 HOL Light, proves all four
+  classes by the multi-process route in 2 hours with 30 worker processes;
+  each class theorem's hypotheses are exactly its task statements, all
+  matched.  `graph_runner_domains`, OCaml 5, proves them in 1.6 hours with
+  no hypotheses.  Both build from a fresh clone.
 - The whole chapter loads in a Flyspeck session; Tri is proved there and its
-  digest matches; the composition with the real Tri theorem and the other
-  three classes imported gives `|- import_tame_classification`, resting on
-  `graph_deserialization` and HOL Light's three axioms and nothing else.
+  digest is the frozen one.
 - End to end in a full Flyspeck session: Tri proved there, the other three
   imported, `|- import_tame_classification`, and with
   `nonlinear/mk_all_ineq.hl` `|- the_kepler_conjecture` (axioms:
   `deserialization`, `graph_deserialization`, HOL Light's three).
-- All four classes inside Flyspeck sessions would need each class split into
-  tasks (the `top` / `sub` modes above) across parallel sessions, with the
-  task theorems imported as the class theorems are now.  Not done.
